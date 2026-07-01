@@ -1,4 +1,6 @@
-import { useLocation } from 'react-router-dom'
+'use client'
+
+import { usePathname } from 'next/navigation'
 import { Search, Bell } from 'lucide-react'
 
 const titles: Record<string, string> = {
@@ -13,7 +15,7 @@ const titles: Record<string, string> = {
 }
 
 export default function Header() {
-  const { pathname } = useLocation()
+  const pathname = usePathname()
   const title = titles[pathname] ?? 'Vinay AI OS'
 
   return (

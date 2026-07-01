@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    @apply bg-background text-foreground;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #26263a;
+    border-radius: 2px;
+  }
+
+  :root {
+    --background: #ffffff;
+    --foreground: #0f0f13;
+    --card: #ffffff;
+    --card-foreground: #0f0f13;
+    --popover: #ffffff;
+    --popover-foreground: #0f0f13;
+    --primary: #7c6af7;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f0f13;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --destructive: #ef4444;
+    --border: #e2e8f0;
+    --input: #e2e8f0;
+    --ring: #7c6af7;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    /* Surfaces */
+    --background: #0f0f13;
+    --foreground: #e2e2f0;
+    --card: #16161d;
+    --card-foreground: #e2e2f0;
+    --popover: #16161d;
+    --popover-foreground: #e2e2f0;
+
+    /* Brand purple as primary */
+    --primary: #7c6af7;
+    --primary-foreground: #ffffff;
+
+    /* Subtle surfaces */
+    --secondary: #1e1e2a;
+    --secondary-foreground: #e2e2f0;
+    --muted: #1e1e2a;
+    --muted-foreground: #64748b;
+
+    /* Accent = subtle hover background */
+    --destructive: #f87171;
+    --border: #26263a;
+    --input: #1e1e2a;
+    --ring: #7c6af7;
+
+    /* Chart colors */
+    --chart-1: #7c6af7;
+    --chart-2: #34d399;
+    --chart-3: #60a5fa;
+    --chart-4: #f59e0b;
+    --chart-5: #f87171;
+  }
+}

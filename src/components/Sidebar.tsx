@@ -1,4 +1,7 @@
-import { NavLink } from 'react-router-dom'
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import {
   CalendarDays,
   Briefcase,
@@ -23,6 +26,8 @@ const nav = [
 ]
 
 export default function Sidebar() {
+  const pathname = usePathname()
+
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-surface-1 border-r border-surface-3">
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-surface-3">
@@ -33,22 +38,23 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {nav.map(({ label, to, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+        {nav.map(({ label, to, icon: Icon }) => {
+          const isActive = pathname === to
+          return (
+            <Link
+              key={to}
+              href={to}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-accent/20 text-accent'
                   : 'text-slate-400 hover:bg-surface-2 hover:text-slate-200'
-              }`
-            }
-          >
-            <Icon size={16} />
-            {label}
-          </NavLink>
-        ))}
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="px-4 py-4 border-t border-surface-3">
