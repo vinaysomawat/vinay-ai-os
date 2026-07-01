@@ -1,7 +1,8 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Search, Bell } from 'lucide-react'
+import { Search, Bell, LogOut } from 'lucide-react'
+import { signout } from '@/app/login/actions'
 
 const titles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -34,6 +35,15 @@ export default function Header() {
         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-purple-400 flex items-center justify-center text-xs font-bold text-white">
           V
         </div>
+        <form action={signout}>
+          <button
+            type="submit"
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-surface-2 hover:text-slate-200 transition-colors"
+            title="Sign out"
+          >
+            <LogOut size={15} />
+          </button>
+        </form>
       </div>
     </header>
   )
