@@ -1,0 +1,45 @@
+import React from 'react'
+import { cn } from '@/lib/utils'
+
+export function Skeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={cn('animate-pulse rounded-lg bg-surface-2', className)} style={style} />
+}
+
+export function CardSkeleton() {
+  return (
+    <div className="bg-surface-1 border border-surface-3 rounded-xl p-5 space-y-3">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-4/5" />
+      <Skeleton className="h-3 w-3/5" />
+    </div>
+  )
+}
+
+export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="bg-surface-1 border border-surface-3 rounded-xl p-5 space-y-3">
+      <Skeleton className="h-4 w-28 mb-4" />
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+          <Skeleton className="h-3 flex-1" style={{ width: `${60 + (i % 3) * 15}%` }} />
+          <Skeleton className="h-3 w-12 shrink-0" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function StatsSkeleton({ cols = 3 }: { cols?: number }) {
+  return (
+    <div className={`grid gap-3`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {Array.from({ length: cols }).map((_, i) => (
+        <div key={i} className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center gap-2">
+          <Skeleton className="h-7 w-12" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}

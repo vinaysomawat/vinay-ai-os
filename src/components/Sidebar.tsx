@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Cpu,
 } from 'lucide-react'
+import UserInfo from './UserInfo'
 
 const nav = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
@@ -57,8 +58,9 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-surface-3">
-        <p className="text-xs text-slate-600 font-mono">v0.1.0</p>
+      <div className="px-3 py-3 border-t border-surface-3 space-y-2">
+        <UserInfo />
+        <p className="text-xs text-slate-700 font-mono px-1">v0.1.0</p>
       </div>
     </aside>
   )
