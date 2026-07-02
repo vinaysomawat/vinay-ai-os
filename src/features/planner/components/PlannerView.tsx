@@ -1,23 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, CheckCircle2, Circle, ChevronRight } from 'lucide-react'
+import { useState, useOptimistic, useTransition } from 'react'
+import { Plus, CheckCircle2, Circle, Trash2 } from 'lucide-react'
 import Card from '@/components/Card'
+import { addTask, toggleTask, deleteTask } from '../actions'
 import type { Task, Priority } from '../types'
-
-const initial: Task[] = [
-  { id: 1, text: 'Review system design notes', done: false, priority: 'high', area: 'Learning' },
-  { id: 2, text: 'Update resume with latest project', done: false, priority: 'high', area: 'Career' },
-  { id: 3, text: "Log yesterday's workout", done: true, priority: 'medium', area: 'Health' },
-  { id: 4, text: 'Pay credit card bill', done: false, priority: 'medium', area: 'Finance' },
-  { id: 5, text: 'Push AI OS commit', done: true, priority: 'low', area: 'Coding' },
-]
-
-const priorityColor: Record<Priority, string> = {
-  high: 'text-red-400',
-  medium: 'text-amber-400',
-  low: 'text-slate-500',
-}
 
 const priorityDot: Record<Priority, string> = {
   high: 'bg-red-400',
@@ -28,24 +15,68 @@ const priorityDot: Record<Priority, string> = {
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
 
-export default function PlannerView() {
-  const [tasks, setTasks] = useState<Task[]>(initial)
+interface Props {
+  initialTasks: Task[]
+}
+
+export default function PlannerView({ initialTasks }: Props) {
   const [input, setInput] = useState('')
+  const [priority, setPriority] = useState<Priority>('medium')
+  const [area, setArea] = useState('General')
+  const [isPending, startTransition] = useTransition()
 
-  const toggle = (id: number) =>
-    setTasks(t => t.map(task => (task.id === id ? { ...task, done: !task.done } : task)))
+  const [optimisticTasks, updateOptimisticTasks] = useOptimistic(
+    initialTasks,
+    (state: Task[], action: { type: string; payload: Partial<Task> & { id?: string } }) => {
+      if (action.type === 'add') return [action.payload as Task, ...state]
+      if (action.type === 'toggle') return state.map(t => t.id === action.payload.id ? { ...t, done: action.payload.done! } : t)
+      if (action.type === 'delete') return state.filter(t => t.id !== action.payload.id)
+      return state
+    }
+  )
 
-  const addTask = () => {
+  const pending = optimisticTasks.filter(t => !t.done)
+  const done = optimisticTasks.filter(t => t.done)
+
+  const handleAdd = () => {
     if (!input.trim()) return
-    setTasks(t => [...t, { id: Date.now(), text: input.trim(), done: false, priority: 'medium', area: 'General' }])
+    const text = input.trim()
     setInput('')
+
+    const optimistic: Task = {
+      id: `temp-${Date.now()}`,
+      user_id: '',
+      text,
+      done: false,
+      priority,
+      area,
+      due_date: null,
+      created_at: new Date().toISOString(),
+    }
+
+    startTransition(async () => {
+      updateOptimisticTasks({ type: 'add', payload: optimistic })
+      await addTask(text, priority, area)
+    })
   }
 
-  const pending = tasks.filter(t => !t.done)
-  const done = tasks.filter(t => t.done)
+  const handleToggle = (id: string, done: boolean) => {
+    startTransition(async () => {
+      updateOptimisticTasks({ type: 'toggle', payload: { id, done: !done } })
+      await toggleTask(id, !done)
+    })
+  }
+
+  const handleDelete = (id: string) => {
+    startTransition(async () => {
+      updateOptimisticTasks({ type: 'delete', payload: { id } })
+      await deleteTask(id)
+    })
+  }
 
   return (
     <div className="space-y-5">
+      {/* Week strip */}
       <div className="grid grid-cols-7 gap-1.5">
         {days.map((d, i) => (
           <div
@@ -65,56 +96,78 @@ export default function PlannerView() {
       </div>
 
       <Card title="Today's Tasks" action={<span className="text-xs text-slate-500">{pending.length} remaining</span>}>
+        {/* Add task row */}
         <div className="flex gap-2 mb-4">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addTask()}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
             placeholder="Add a task..."
             className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
           />
+          <select
+            value={priority}
+            onChange={e => setPriority(e.target.value as Priority)}
+            className="bg-surface-2 border border-surface-3 rounded-lg px-2 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors"
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
           <button
-            onClick={addTask}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors"
+            onClick={handleAdd}
+            disabled={isPending || !input.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors"
           >
             <Plus size={14} />
             Add
           </button>
         </div>
 
+        {/* Pending tasks */}
+        {pending.length === 0 && (
+          <p className="text-sm text-slate-600 text-center py-6">No tasks — add one above</p>
+        )}
         <ul className="space-y-1.5">
           {pending.map(task => (
-            <li
-              key={task.id}
-              className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group cursor-pointer"
-              onClick={() => toggle(task.id)}
-            >
-              <Circle size={16} className="text-slate-600 group-hover:text-accent transition-colors shrink-0" />
+            <li key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+              <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
+                <Circle size={16} className="text-slate-600 group-hover:text-accent transition-colors" />
+              </button>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-slate-200">{task.text}</p>
                 <p className="text-xs text-slate-600">{task.area}</p>
               </div>
-              <div className={`w-1.5 h-1.5 rounded-full ${priorityDot[task.priority]}`} />
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority]}`} />
+              <button
+                onClick={() => handleDelete(task.id)}
+                className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"
+              >
+                <Trash2 size={13} />
+              </button>
             </li>
           ))}
         </ul>
 
+        {/* Completed tasks */}
         {done.length > 0 && (
           <details className="mt-4">
             <summary className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none list-none">
-              <ChevronRight size={12} />
-              Completed ({done.length})
+              <span>›</span> Completed ({done.length})
             </summary>
             <ul className="space-y-1.5 mt-2">
               {done.map(task => (
-                <li
-                  key={task.id}
-                  className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors cursor-pointer"
-                  onClick={() => toggle(task.id)}
-                >
-                  <CheckCircle2 size={16} className="text-green-500 shrink-0" />
-                  <p className="text-sm text-slate-500 line-through">{task.text}</p>
-                  <span className={`ml-auto text-xs ${priorityColor[task.priority]}`}>{task.area}</span>
+                <li key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                  <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
+                    <CheckCircle2 size={16} className="text-green-500" />
+                  </button>
+                  <p className="flex-1 text-sm text-slate-500 line-through">{task.text}</p>
+                  <button
+                    onClick={() => handleDelete(task.id)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </li>
               ))}
             </ul>
