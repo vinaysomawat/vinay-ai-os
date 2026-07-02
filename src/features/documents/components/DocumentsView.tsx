@@ -1,109 +1,161 @@
 'use client'
 
+import { useState, useOptimistic, useTransition } from 'react'
+import { Plus, Trash2, X, Search, FileText } from 'lucide-react'
 import Card from '@/components/Card'
-import { FileText, FolderOpen, Plus, Download, Search } from 'lucide-react'
-import { useState } from 'react'
+import { addDocument, updateDocument, deleteDocument } from '../actions'
+import type { Document } from '../types'
 
-interface Doc {
-  name: string
-  folder: string
-  size: string
-  updated: string
-  type: 'pdf' | 'md' | 'txt' | 'doc'
-}
+interface Props { initialDocuments: Document[] }
 
-const docs: Doc[] = [
-  { name: 'Resume_2025.pdf', folder: 'Career', size: '148 KB', updated: 'Jun 28', type: 'pdf' },
-  { name: 'System Design Notes.md', folder: 'Learning', size: '32 KB', updated: 'Jun 30', type: 'md' },
-  { name: 'Monthly Budget June.md', folder: 'Finance', size: '8 KB', updated: 'Jun 30', type: 'md' },
-  { name: 'Offer Letter - Wipro.pdf', folder: 'Career', size: '220 KB', updated: 'May 15', type: 'pdf' },
-  { name: 'Workout Plan Q3.txt', folder: 'Health', size: '4 KB', updated: 'Jun 20', type: 'txt' },
-  { name: 'AWS Study Guide.md', folder: 'Learning', size: '61 KB', updated: 'Jun 22', type: 'md' },
-  { name: 'SIP Investment Plan.doc', folder: 'Finance', size: '18 KB', updated: 'Jun 10', type: 'doc' },
-  { name: 'Coding Interview Prep.md', folder: 'Career', size: '45 KB', updated: 'Jun 25', type: 'md' },
-]
+export default function DocumentsView({ initialDocuments }: Props) {
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Document | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [editTags, setEditTags] = useState('')
+  const [isPending, startTransition] = useTransition()
 
-const folders = ['All', 'Career', 'Finance', 'Health', 'Learning']
-
-const typeColor: Record<Doc['type'], string> = {
-  pdf: 'text-red-400 bg-red-400/10',
-  md: 'text-blue-400 bg-blue-400/10',
-  txt: 'text-slate-400 bg-slate-400/10',
-  doc: 'text-blue-300 bg-blue-300/10',
-}
-
-export default function DocumentsView() {
-  const [folder, setFolder] = useState('All')
-  const [query, setQuery] = useState('')
-
-  const filtered = docs.filter(
-    d =>
-      (folder === 'All' || d.folder === folder) &&
-      d.name.toLowerCase().includes(query.toLowerCase()),
+  const [docs, updateDocs] = useOptimistic(
+    initialDocuments,
+    (state: Document[], action: { type: string; payload: Partial<Document> & { id?: string } }) => {
+      if (action.type === 'add') return [action.payload as Document, ...state]
+      if (action.type === 'update') return state.map(d => d.id === action.payload.id ? { ...d, ...action.payload } : d)
+      if (action.type === 'delete') return state.filter(d => d.id !== action.payload.id)
+      return state
+    }
   )
 
+  const filtered = docs.filter(d =>
+    d.title.toLowerCase().includes(search.toLowerCase()) ||
+    d.content.toLowerCase().includes(search.toLowerCase()) ||
+    d.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+  )
+
+  const handleAdd = () => {
+    if (!editTitle.trim()) return
+    const tags = editTags.split(',').map(t => t.trim()).filter(Boolean)
+    const optimistic: Document = {
+      id: `temp-${Date.now()}`, user_id: '',
+      title: editTitle, content: editContent, tags,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }
+    setShowForm(false)
+    setEditTitle(''); setEditContent(''); setEditTags('')
+    startTransition(async () => {
+      updateDocs({ type: 'add', payload: optimistic })
+      await addDocument(optimistic.title, optimistic.content, tags)
+    })
+  }
+
+  const handleSave = () => {
+    if (!selected || !editTitle.trim()) return
+    const tags = editTags.split(',').map(t => t.trim()).filter(Boolean)
+    const updated = { ...selected, title: editTitle, content: editContent, tags, updated_at: new Date().toISOString() }
+    setSelected(updated)
+    startTransition(async () => {
+      updateDocs({ type: 'update', payload: updated })
+      await updateDocument(selected.id, editTitle, editContent, tags)
+    })
+  }
+
+  const handleDelete = (id: string) => {
+    if (selected?.id === id) setSelected(null)
+    startTransition(async () => {
+      updateDocs({ type: 'delete', payload: { id } })
+      await deleteDocument(id)
+    })
+  }
+
+  const openDoc = (doc: Document) => {
+    setSelected(doc)
+    setEditTitle(doc.title)
+    setEditContent(doc.content)
+    setEditTags(doc.tags.join(', '))
+    setShowForm(false)
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 flex-1 bg-surface-1 border border-surface-3 rounded-lg px-3 py-2">
-          <Search size={14} className="text-slate-500 shrink-0" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search documents..."
-            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600 outline-none"
-          />
+    <div className="flex gap-4 h-[calc(100vh-8rem)]">
+      {/* Sidebar */}
+      <div className="w-64 shrink-0 flex flex-col gap-3">
+        <div className="flex items-center gap-2 bg-surface-1 border border-surface-3 rounded-lg px-3 py-2">
+          <Search size={13} className="text-slate-500 shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." className="flex-1 bg-transparent text-sm text-slate-300 placeholder-slate-600 outline-none" />
         </div>
-        <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">
-          <Plus size={14} />
-          Upload
+        <button onClick={() => { setShowForm(true); setSelected(null); setEditTitle(''); setEditContent(''); setEditTags('') }}
+          className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">
+          <Plus size={13} /> New document
         </button>
-      </div>
-
-      <div className="flex gap-2">
-        {folders.map(f => (
-          <button
-            key={f}
-            onClick={() => setFolder(f)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              folder === f
-                ? 'bg-accent/20 text-accent'
-                : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'
-            }`}
-          >
-            <FolderOpen size={13} />
-            {f}
-          </button>
-        ))}
-      </div>
-
-      <Card title={`${filtered.length} document${filtered.length !== 1 ? 's' : ''}`}>
-        <div className="space-y-1.5">
+        <div className="flex-1 overflow-y-auto space-y-1">
+          {filtered.length === 0 && <p className="text-xs text-slate-600 text-center py-6">No documents</p>}
           {filtered.map(doc => (
-            <div
-              key={doc.name}
-              className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-2 transition-colors group cursor-pointer"
-            >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${typeColor[doc.type]}`}>
-                <FileText size={14} />
+            <button key={doc.id} onClick={() => openDoc(doc)}
+              className={`w-full text-left p-3 rounded-lg border transition-colors group ${selected?.id === doc.id ? 'bg-accent/10 border-accent/30' : 'bg-surface-1 border-surface-3 hover:bg-surface-2'}`}>
+              <div className="flex items-start gap-2">
+                <FileText size={13} className="shrink-0 mt-0.5 text-slate-500" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-300 truncate font-medium">{doc.title}</p>
+                  <p className="text-xs text-slate-600 mt-0.5 truncate">{doc.content.slice(0, 50) || 'Empty'}</p>
+                  {doc.tags.length > 0 && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {doc.tags.slice(0, 2).map(t => <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-slate-500">{t}</span>)}
+                    </div>
+                  )}
+                </div>
+                <button onClick={e => { e.stopPropagation(); handleDelete(doc.id) }}
+                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all shrink-0">
+                  <Trash2 size={12} />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-200">{doc.name}</p>
-                <p className="text-xs text-slate-600">{doc.folder} · {doc.size} · {doc.updated}</p>
-              </div>
-              <code className={`text-xs px-1.5 py-0.5 rounded uppercase font-mono ${typeColor[doc.type]}`}>
-                {doc.type}
-              </code>
-              <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-surface-3">
-                <Download size={13} className="text-slate-400" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Editor */}
+      <div className="flex-1 bg-surface-1 border border-surface-3 rounded-xl flex flex-col overflow-hidden">
+        {(selected || showForm) ? (
+          <>
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-surface-3">
+              <input
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                placeholder="Document title..."
+                className="flex-1 bg-transparent text-base font-semibold text-slate-200 placeholder-slate-600 outline-none"
+              />
+              <input
+                value={editTags}
+                onChange={e => setEditTags(e.target.value)}
+                placeholder="tags, comma, separated"
+                className="bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-xs text-slate-400 placeholder-slate-600 outline-none focus:border-accent transition-colors w-48"
+              />
+              <button
+                onClick={showForm ? handleAdd : handleSave}
+                disabled={isPending || !editTitle.trim()}
+                className="px-4 py-1.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors"
+              >
+                {showForm ? 'Create' : 'Save'}
+              </button>
+              <button onClick={() => { setSelected(null); setShowForm(false) }} className="text-slate-500 hover:text-slate-300">
+                <X size={15} />
               </button>
             </div>
-          ))}
-          {filtered.length === 0 && (
-            <div className="py-8 text-center text-slate-600 text-sm">No documents found</div>
-          )}
-        </div>
-      </Card>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              placeholder="Start writing..."
+              className="flex-1 bg-transparent px-5 py-4 text-sm text-slate-300 placeholder-slate-600 outline-none resize-none leading-relaxed font-mono"
+            />
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-600">
+            <FileText size={32} className="mb-3 opacity-30" />
+            <p className="text-sm">Select a document or create a new one</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
