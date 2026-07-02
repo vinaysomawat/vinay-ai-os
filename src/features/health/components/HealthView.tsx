@@ -1,109 +1,249 @@
+'use client'
+
+import { useState, useOptimistic, useTransition } from 'react'
+import { Plus, Trash2, X, Flame } from 'lucide-react'
 import Card from '@/components/Card'
-import { Flame, Dumbbell, Droplets, Moon } from 'lucide-react'
+import { addHabit, logHabit, unlogHabit, deleteHabit } from '../actions'
+import type { HabitWithLogs } from '../types'
 
-const streakDays = [true, true, true, true, true, true, false]
-const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
+const ICONS = ['🏋️', '💧', '😴', '🧘', '📚', '🏃', '🥗', '💊', '🚴', '✍️']
 
-const metrics = [
-  { icon: Dumbbell, label: 'Workout', value: '45 min', sub: 'Upper body', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-  { icon: Droplets, label: 'Water', value: '2.1 L', sub: '/ 3 L goal', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-  { icon: Moon, label: 'Sleep', value: '7h 20m', sub: 'Good quality', color: 'text-purple-400', bg: 'bg-purple-500/10' },
-  { icon: Flame, label: 'Calories', value: '1,840', sub: '/ 2,200 kcal', color: 'text-orange-400', bg: 'bg-orange-500/10' },
-]
+function getLast7Days() {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return d.toISOString().split('T')[0]
+  })
+}
 
-const workouts = [
-  { name: 'Push Day', muscles: 'Chest · Shoulders · Triceps', done: true },
-  { name: 'Pull Day', muscles: 'Back · Biceps', done: true },
-  { name: 'Leg Day', muscles: 'Quads · Hamstrings · Glutes', done: false },
-  { name: 'Cardio', muscles: '30 min zone 2', done: false },
-]
+function getStreak(logs: { date: string }[]): number {
+  const dates = new Set(logs.map(l => l.date))
+  let streak = 0
+  const today = new Date()
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    if (dates.has(d.toISOString().split('T')[0])) streak++
+    else break
+  }
+  return streak
+}
 
-const habits = [
-  { name: 'Morning walk', streak: 12, done: true },
-  { name: 'No sugar', streak: 4, done: true },
-  { name: 'Cold shower', streak: 7, done: false },
-  { name: 'Read 20 pages', streak: 2, done: true },
-  { name: 'No phone after 10pm', streak: 0, done: false },
-]
+interface Props {
+  initialHabits: HabitWithLogs[]
+}
 
-export default function HealthView() {
+export default function HealthView({ initialHabits }: Props) {
+  const [showForm, setShowForm] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newIcon, setNewIcon] = useState('🏋️')
+  const [isPending, startTransition] = useTransition()
+  const days = getLast7Days()
+  const today = days[6]
+
+  const [habits, updateHabits] = useOptimistic(
+    initialHabits,
+    (state: HabitWithLogs[], action: { type: string; payload: Record<string, string> }) => {
+      if (action.type === 'add') {
+        return [...state, { id: `temp-${Date.now()}`, user_id: '', name: action.payload.name, icon: action.payload.icon, created_at: new Date().toISOString(), logs: [] }]
+      }
+      if (action.type === 'log') {
+        return state.map(h => h.id === action.payload.habitId
+          ? { ...h, logs: [...h.logs, { id: `temp-log-${Date.now()}`, user_id: '', habit_id: action.payload.habitId, date: action.payload.date, created_at: new Date().toISOString() }] }
+          : h)
+      }
+      if (action.type === 'unlog') {
+        return state.map(h => h.id === action.payload.habitId
+          ? { ...h, logs: h.logs.filter(l => l.date !== action.payload.date) }
+          : h)
+      }
+      if (action.type === 'delete') {
+        return state.filter(h => h.id !== action.payload.id)
+      }
+      return state
+    }
+  )
+
+  const handleAdd = () => {
+    if (!newName.trim()) return
+    const name = newName.trim()
+    const icon = newIcon
+    setNewName('')
+    setShowForm(false)
+    startTransition(async () => {
+      updateHabits({ type: 'add', payload: { name, icon } })
+      await addHabit(name, icon)
+    })
+  }
+
+  const handleToggle = (habitId: string, date: string, logged: boolean) => {
+    startTransition(async () => {
+      if (logged) {
+        updateHabits({ type: 'unlog', payload: { habitId, date } })
+        await unlogHabit(habitId, date)
+      } else {
+        updateHabits({ type: 'log', payload: { habitId, date } })
+        await logHabit(habitId, date)
+      }
+    })
+  }
+
+  const handleDelete = (id: string) => {
+    startTransition(async () => {
+      updateHabits({ type: 'delete', payload: { id } })
+      await deleteHabit(id)
+    })
+  }
+
+  const completedToday = habits.filter(h => h.logs.some(l => l.date === today)).length
+
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-4 gap-3">
-        {metrics.map(m => (
-          <Card key={m.label}>
-            <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center mb-3`}>
-              <m.icon size={16} className={m.color} />
-            </div>
-            <p className="text-xl font-bold text-white">{m.value}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{m.label} · {m.sub}</p>
-          </Card>
-        ))}
+      {/* Summary row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
+          <span className="text-2xl font-bold text-accent">{completedToday}</span>
+          <span className="text-xs text-slate-500 mt-1">Done today</span>
+        </div>
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
+          <span className="text-2xl font-bold text-slate-200">{habits.length}</span>
+          <span className="text-xs text-slate-500 mt-1">Total habits</span>
+        </div>
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
+          <span className="text-2xl font-bold text-amber-400">
+            {habits.length > 0 ? Math.max(...habits.map(h => getStreak(h.logs))) : 0}
+          </span>
+          <span className="text-xs text-slate-500 mt-1">Best streak</span>
+        </div>
       </div>
 
-      <Card title="Weekly Streak">
-        <div className="flex items-center gap-1">
-          <Flame size={14} className="text-orange-400 mr-1" />
-          <span className="text-sm text-orange-400 font-semibold mr-4">6-day streak</span>
-          <div className="flex gap-1.5 flex-1">
-            {dayLabels.map((d, i) => (
-              <div key={d} className="flex flex-col items-center gap-1">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium ${
-                  i < streakDays.length && streakDays[i]
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : i === todayIdx
-                    ? 'bg-surface-3 text-slate-400 border border-dashed border-slate-600'
-                    : 'bg-surface-2 text-slate-600'
-                }`}>
-                  {i < streakDays.length && streakDays[i] ? '✓' : i > todayIdx ? '·' : '✗'}
-                </div>
-                <span className={`text-xs ${i === todayIdx ? 'text-white' : 'text-slate-600'}`}>{d}</span>
-              </div>
-            ))}
-          </div>
+      {/* Habit tracker grid */}
+      <Card
+        title="Weekly Habits"
+        action={
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors"
+          >
+            <Plus size={12} /> Add habit
+          </button>
+        }
+      >
+        {/* Day headers */}
+        <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr repeat(7, 2rem)' }}>
+          <span className="text-xs text-slate-600">Habit</span>
+          {days.map(d => {
+            const isToday = d === today
+            const label = new Date(d + 'T00:00:00').toLocaleDateString('en', { weekday: 'short' }).slice(0, 1)
+            return (
+              <span key={d} className={`text-xs text-center font-medium ${isToday ? 'text-accent' : 'text-slate-600'}`}>
+                {label}
+              </span>
+            )
+          })}
+          <span />
         </div>
+
+        {habits.length === 0 && (
+          <p className="text-sm text-slate-600 text-center py-8">No habits yet — add one above</p>
+        )}
+
+        <ul className="space-y-2">
+          {habits.map(habit => {
+            const streak = getStreak(habit.logs)
+            return (
+              <li key={habit.id} className="grid items-center gap-2 group" style={{ gridTemplateColumns: '1fr repeat(7, 2rem) 1.5rem' }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base">{habit.icon}</span>
+                  <span className="text-sm text-slate-300 truncate">{habit.name}</span>
+                  {streak > 0 && (
+                    <span className="flex items-center gap-0.5 text-xs text-amber-400 shrink-0">
+                      <Flame size={10} />{streak}
+                    </span>
+                  )}
+                </div>
+                {days.map(date => {
+                  const logged = habit.logs.some(l => l.date === date)
+                  const isToday = date === today
+                  return (
+                    <button
+                      key={date}
+                      onClick={() => handleToggle(habit.id, date, logged)}
+                      disabled={isPending}
+                      className={`w-8 h-8 rounded-lg border transition-colors ${
+                        logged
+                          ? 'bg-accent border-accent text-white'
+                          : isToday
+                          ? 'bg-surface-2 border-accent/30 hover:border-accent/60'
+                          : 'bg-surface-2 border-surface-3 hover:border-slate-500'
+                      }`}
+                    >
+                      {logged && <span className="text-xs">✓</span>}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => handleDelete(habit.id)}
+                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Weekly Workout Plan">
-          <ul className="space-y-2">
-            {workouts.map(w => (
-              <li key={w.name} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-2">
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  w.done ? 'bg-green-500 border-green-500' : 'border-surface-3'
-                }`}>
-                  {w.done && <span className="text-white text-xs">✓</span>}
+      {/* Add habit modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-slate-200">New Habit</h2>
+              <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-slate-300">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
+                <input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  placeholder="Morning workout"
+                  autoFocus
+                  className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Icon</label>
+                <div className="flex flex-wrap gap-2">
+                  {ICONS.map(icon => (
+                    <button
+                      key={icon}
+                      onClick={() => setNewIcon(icon)}
+                      className={`w-9 h-9 rounded-lg text-lg border transition-colors ${
+                        newIcon === icon ? 'bg-accent/20 border-accent' : 'bg-surface-2 border-surface-3 hover:border-slate-500'
+                      }`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <p className={`text-sm font-medium ${w.done ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{w.name}</p>
-                  <p className="text-xs text-slate-600">{w.muscles}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card title="Daily Habits">
-          <ul className="space-y-2">
-            {habits.map(h => (
-              <li key={h.name} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-2">
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  h.done ? 'bg-green-500 border-green-500' : 'border-surface-3'
-                }`}>
-                  {h.done && <span className="text-white text-xs">✓</span>}
-                </div>
-                <p className={`flex-1 text-sm ${h.done ? 'text-slate-300' : 'text-slate-400'}`}>{h.name}</p>
-                {h.streak > 0 && (
-                  <span className="flex items-center gap-0.5 text-xs text-orange-400">
-                    <Flame size={10} /> {h.streak}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleAdd} disabled={!newName.trim()} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
+                  Add Habit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
