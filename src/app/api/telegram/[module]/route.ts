@@ -16,8 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mod
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // Respond to Telegram immediately (they retry if we don't answer fast)
-  handleUpdate(module, update).catch(console.error)
+  await handleUpdate(module, update)
 
   return NextResponse.json({ ok: true })
 }
