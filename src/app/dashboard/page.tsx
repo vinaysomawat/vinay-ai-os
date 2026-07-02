@@ -5,7 +5,7 @@ import { getDailyBriefing } from '@/features/ai/briefing'
 export default async function DashboardPage() {
   const [data, briefing] = await Promise.all([
     getDashboardData(),
-    getDailyBriefing(),
+    getDailyBriefing().catch(() => ''),
   ])
   return <DashboardView data={data} briefing={briefing} />
 }

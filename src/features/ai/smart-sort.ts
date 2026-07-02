@@ -14,10 +14,10 @@ ${tasks.map(t => `{"id":"${t.id}","text":"${t.text}","priority":"${t.priority}",
 
 Respond with only a JSON array like: ["id1","id2","id3"]`
 
-  const raw = await aiText(prompt)
-  const match = raw.match(/\[[\s\S]*\]/)
-  if (!match) return tasks.map(t => t.id)
   try {
+    const raw = await aiText(prompt)
+    const match = raw.match(/\[[\s\S]*\]/)
+    if (!match) return tasks.map(t => t.id)
     return JSON.parse(match[0]) as string[]
   } catch {
     return tasks.map(t => t.id)
@@ -36,5 +36,5 @@ ${pending.map(t => `- [${t.priority}] ${t.text}${t.due_date ? ` (due ${t.due_dat
 
 Reply with: "Focus on: <task text> — <one-sentence reason>"`
 
-  return aiText(prompt)
+  return aiText(prompt).catch(() => '')
 }
