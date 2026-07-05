@@ -3,10 +3,21 @@
 import { aiText } from '@/lib/anthropic'
 
 export interface Recommendation {
-  module: string
   emoji: string
   action: string
   impact: string
+}
+
+export interface FullRecommendations {
+  summary: string
+  overall: (Recommendation & { module: string })[]
+  byModule: {
+    health:   Recommendation[]
+    finance:  Recommendation[]
+    career:   Recommendation[]
+    learning: Recommendation[]
+    projects: Recommendation[]
+  }
 }
 
 interface RecContext {
@@ -15,38 +26,106 @@ interface RecContext {
   todayHealth: { weight_kg: number | null; calories: number | null; sleep_hours: number | null; steps: number | null; water_ml: number | null } | null
 }
 
-export async function getAIRecommendations(ctx: RecContext): Promise<Recommendation[]> {
-  const prompt = `Life scores today — Health: ${ctx.scores.health}/100, Finance: ${ctx.scores.finance}/100, Career: ${ctx.scores.career}/100, Learning: ${ctx.scores.learning}/100, Projects: ${ctx.scores.projects}/100. Overall Life Score: ${ctx.scores.life}/100.
+const EMPTY: FullRecommendations = {
+  summary: '',
+  overall: [],
+  byModule: { health: [], finance: [], career: [], learning: [], projects: [] },
+}
 
-Today's data:
-- Habits: ${ctx.stats.habitsDoneToday} of ${ctx.stats.totalHabits} done
-- Pending tasks: ${ctx.stats.pendingTaskCount}
-- Month spend: ₹${Math.round(ctx.stats.monthSpend).toLocaleString('en-IN')} of ₹${Math.round(ctx.stats.monthBudget || 0).toLocaleString('en-IN')} budget
-- Active job applications: ${ctx.stats.activeApplications}
-- Learning resources in progress: ${ctx.stats.learningInProgress}
-- Active projects: ${ctx.stats.activeProjects}
-${ctx.todayHealth
-  ? `- Health today: weight=${ctx.todayHealth.weight_kg ?? 'not logged'}kg, sleep=${ctx.todayHealth.sleep_hours ?? 'not logged'}h, steps=${ctx.todayHealth.steps ?? 'not logged'}, water=${ctx.todayHealth.water_ml ?? 'not logged'}ml, calories=${ctx.todayHealth.calories ?? 'not logged'}`
-  : '- No health metrics logged today'}
+export async function getFullRecommendations(ctx: RecContext): Promise<FullRecommendations> {
+  const scores = ctx.scores
+  const stats  = ctx.stats
+  const h      = ctx.todayHealth
 
-Generate exactly 5 specific, actionable recommendations for today. Focus on the weakest scoring modules first. Each action must be something Vinay can do TODAY.
+  const prompt = `You are Vinay's AI life coach. Generate a full recommendations report based on his data.
 
-Return ONLY a JSON array (no other text):
-[
-  {"module": "health", "emoji": "💪", "action": "Log your sleep and drink 500ml water now to start tracking", "impact": "+4 Health Score"},
-  {"module": "learning", "emoji": "📚", "action": "Spend 30 minutes on your in-progress course", "impact": "+2 Learning Score"},
-  ...
-]
+SCORES TODAY:
+- Life Score: ${scores.life}/100
+- Health: ${scores.health}/100
+- Finance: ${scores.finance}/100
+- Career: ${scores.career}/100
+- Learning: ${scores.learning}/100
+- Projects: ${scores.projects}/100
 
-module must be one of: health, finance, career, learning, projects, planner`
+LIVE DATA:
+- Habits done: ${stats.habitsDoneToday}/${stats.totalHabits}
+- Pending tasks: ${stats.pendingTaskCount}
+- Month spend: ₹${Math.round(stats.monthSpend).toLocaleString('en-IN')} of ₹${Math.round(stats.monthBudget || 0).toLocaleString('en-IN')} budget
+- Active job applications: ${stats.activeApplications}
+- Learning resources in progress: ${stats.learningInProgress}
+- Active projects: ${stats.activeProjects}
+- Health today: weight=${h?.weight_kg ?? 'not logged'}kg, sleep=${h?.sleep_hours ?? 'not logged'}h, steps=${h?.steps ?? 'not logged'}, water=${h?.water_ml ?? 'not logged'}ml, calories=${h?.calories ?? 'not logged'}
 
-  const raw = await aiText(prompt,
-    'You are Vinay\'s AI life coach. Be specific, direct, and reference the actual data. Return only valid JSON array, no markdown, no extra text.')
+Return ONLY this JSON object (no markdown, no extra text):
+{
+  "summary": "2-3 sentence overview: current Life Score, which module needs most attention and why, one encouraging note about what's going well.",
+  "overall": [
+    {"module": "health", "emoji": "💪", "action": "specific action for today", "impact": "+3 Health Score"},
+    {"module": "finance", "emoji": "💸", "action": "specific action for today", "impact": "+2 Finance Score"},
+    {"module": "career", "emoji": "💼", "action": "specific action for today", "impact": "+2 Career Score"},
+    {"module": "learning", "emoji": "📚", "action": "specific action for today", "impact": "+1 Learning Score"},
+    {"module": "projects", "emoji": "💻", "action": "specific action for today", "impact": "+2 Projects Score"}
+  ],
+  "byModule": {
+    "health": [
+      {"emoji": "💪", "action": "specific health action 1", "impact": "+2 Health Score"},
+      {"emoji": "🥗", "action": "specific health action 2", "impact": "+1 Health Score"},
+      {"emoji": "😴", "action": "specific health action 3", "impact": "+2 Health Score"}
+    ],
+    "finance": [
+      {"emoji": "💰", "action": "specific finance action 1", "impact": "+3 Finance Score"},
+      {"emoji": "📊", "action": "specific finance action 2", "impact": "+2 Finance Score"},
+      {"emoji": "🏦", "action": "specific finance action 3", "impact": "+1 Finance Score"}
+    ],
+    "career": [
+      {"emoji": "💼", "action": "specific career action 1", "impact": "+3 Career Score"},
+      {"emoji": "🎯", "action": "specific career action 2", "impact": "+2 Career Score"},
+      {"emoji": "📝", "action": "specific career action 3", "impact": "+1 Career Score"}
+    ],
+    "learning": [
+      {"emoji": "📚", "action": "specific learning action 1", "impact": "+3 Learning Score"},
+      {"emoji": "✏️", "action": "specific learning action 2", "impact": "+2 Learning Score"},
+      {"emoji": "🧠", "action": "specific learning action 3", "impact": "+1 Learning Score"}
+    ],
+    "projects": [
+      {"emoji": "💻", "action": "specific project action 1", "impact": "+3 Projects Score"},
+      {"emoji": "🚀", "action": "specific project action 2", "impact": "+2 Projects Score"},
+      {"emoji": "🔧", "action": "specific project action 3", "impact": "+1 Projects Score"}
+    ]
+  }
+}
+
+Rules:
+- summary must reference actual scores and data
+- overall top 5 must be ordered by highest impact to Life Score first (weakest modules get priority)
+- byModule actions must be specific to that module's real data
+- module in overall must be one of: health, finance, career, learning, projects, planner`
+
+  const raw = await aiText(prompt, 'You are Vinay\'s AI life coach. Be specific, data-driven, and motivating. Return only valid JSON, no markdown fences.')
 
   try {
-    const match = raw.match(/\[[\s\S]*\]/)
-    return match ? JSON.parse(match[0]) : []
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) return EMPTY
+    const parsed = JSON.parse(match[0]) as FullRecommendations
+    return {
+      summary:  parsed.summary  ?? '',
+      overall:  parsed.overall  ?? [],
+      byModule: {
+        health:   parsed.byModule?.health   ?? [],
+        finance:  parsed.byModule?.finance  ?? [],
+        career:   parsed.byModule?.career   ?? [],
+        learning: parsed.byModule?.learning ?? [],
+        projects: parsed.byModule?.projects ?? [],
+      },
+    }
   } catch {
-    return []
+    return EMPTY
   }
+}
+
+// Keep old export for any callers
+export type { RecContext }
+export async function getAIRecommendations(ctx: RecContext) {
+  const full = await getFullRecommendations(ctx)
+  return full.overall
 }
