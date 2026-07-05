@@ -6,7 +6,7 @@ export const anthropic = new Anthropic({
 
 export async function aiText(prompt: string, system?: string): Promise<string> {
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-fable-5',
     max_tokens: 1024,
     system: system ?? 'You are a helpful personal AI assistant. Be concise, practical, and actionable.',
     messages: [{ role: 'user', content: prompt }],
