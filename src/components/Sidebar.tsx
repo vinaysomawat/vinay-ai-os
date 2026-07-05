@@ -13,12 +13,14 @@ import {
   LayoutDashboard,
   Cpu,
   Sparkles,
+  Search,
 } from 'lucide-react'
 import UserInfo from './UserInfo'
 
 const nav = [
   { label: 'Dashboard',       to: '/dashboard',       icon: LayoutDashboard },
   { label: 'Recommendations', to: '/recommendations', icon: Sparkles },
+  { label: 'Search',          to: '/search',          icon: Search },
   { label: 'Planner',         to: '/planner',         icon: CalendarDays },
   { label: 'Career', to: '/career', icon: Briefcase },
   { label: 'Finance', to: '/finance', icon: DollarSign },
@@ -32,7 +34,7 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col bg-surface-1 border-r border-surface-3">
+    <aside className="hidden md:flex w-56 shrink-0 flex-col bg-surface-1 border-r border-surface-3">
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-surface-3">
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent">
           <Cpu size={15} className="text-white" />

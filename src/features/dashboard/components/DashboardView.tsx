@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import Card from '@/components/Card'
 import ScoreHero from './ScoreHero'
+import LifeScoreChart from './LifeScoreChart'
 import { formatDistanceToNow } from 'date-fns'
 import type { getDashboardData } from '../actions'
 
@@ -88,7 +89,7 @@ function computeInsights(
 }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
-  const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth } = data
+  const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth, scoreHistory } = data
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -162,6 +163,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </div>
         </div>
       </div>
+
+      {/* 30-day Score History */}
+      <Card title="30-Day Score History">
+        <LifeScoreChart data={scoreHistory} />
+      </Card>
 
       {/* Insights */}
       {insights.length > 0 && (

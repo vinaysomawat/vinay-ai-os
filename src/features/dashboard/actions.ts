@@ -13,6 +13,7 @@ export async function getDashboardData() {
     pendingTasks: [], recentApplications: [], botActivity: [],
     scores: { health: 0, finance: 50, career: 0, learning: 0, projects: 0, life: 0 },
     todayHealth: null,
+    scoreHistory: [] as { date: string; life: number; health: number; finance: number; career: number; learning: number; projects: number }[],
     stats: { pendingTaskCount: 0, activeApplications: 0, habitsDoneToday: 0, totalHabits: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, activeProjects: 0, completedProjects: 0, documentCount: 0 },
   }
 
@@ -101,11 +102,39 @@ export async function getDashboardData() {
     projectsScore * 0.15
   )
 
+  // Upsert today's scores for history tracking
+  await supabase.from('life_score_logs').upsert({
+    user_id: user.id, date: today,
+    health_score: healthScore, finance_score: financeScore,
+    career_score: careerScore, learning_score: learningScore,
+    projects_score: projectsScore, life_score: lifeScore,
+  }, { onConflict: 'user_id,date' })
+
+  // Fetch 30-day history
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
+  const { data: historyRows } = await supabase
+    .from('life_score_logs')
+    .select('date, life_score, health_score, finance_score, career_score, learning_score, projects_score')
+    .eq('user_id', user.id)
+    .gte('date', since)
+    .order('date', { ascending: true })
+
+  const scoreHistory = (historyRows ?? []).map(r => ({
+    date: r.date as string,
+    life: r.life_score as number,
+    health: r.health_score as number,
+    finance: r.finance_score as number,
+    career: r.career_score as number,
+    learning: r.learning_score as number,
+    projects: r.projects_score as number,
+  }))
+
   return {
     pendingTasks,
     recentApplications: applications.slice(0, 3),
     botActivity: botLogsRes.data ?? [],
     todayHealth: todayMetric,
+    scoreHistory,
     scores: { health: healthScore, finance: financeScore, career: careerScore, learning: learningScore, projects: projectsScore, life: lifeScore },
     stats: {
       pendingTaskCount: pendingTasks.length,

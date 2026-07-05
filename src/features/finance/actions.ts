@@ -17,7 +17,7 @@ export async function getFinanceData() {
 
   if (!user) return { expenses: [], budgets: [], profile: null, loans: [], investments: [], goals: [], avgMonthlyExpense: 0, month }
 
-  const [expensesRes, budgetsRes, profileRes, loansRes, investmentsRes, goalsRes, recentExpensesRes] = await Promise.all([
+  const [expensesRes, budgetsRes, profileRes, loansRes, investmentsRes, goalsRes, recentExpensesRes, salaryHistoryRes] = await Promise.all([
     supabase.from('expenses').select('*').eq('user_id', user.id).gte('date', startOfMonth).order('date', { ascending: false }),
     supabase.from('budgets').select('*').eq('user_id', user.id).eq('month', month),
     supabase.from('finance_profile').select('*').eq('user_id', user.id).single(),
@@ -25,6 +25,7 @@ export async function getFinanceData() {
     supabase.from('investments').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
     supabase.from('financial_goals').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
     supabase.from('expenses').select('amount').eq('user_id', user.id).gte('date', threeMonthsAgo),
+    supabase.from('salary_history').select('amount, effective_date, note').eq('user_id', user.id).order('effective_date', { ascending: true }),
   ])
 
   const recentTotal = (recentExpensesRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0)
@@ -37,6 +38,7 @@ export async function getFinanceData() {
     loans: loansRes.data ?? [],
     investments: investmentsRes.data ?? [],
     goals: goalsRes.data ?? [],
+    salaryHistory: (salaryHistoryRes.data ?? []) as { amount: number; effective_date: string; note: string | null }[],
     avgMonthlyExpense,
     month,
   }
@@ -46,10 +48,23 @@ export async function upsertProfile(salary: number | null, emergencyFundMonths: 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
+
+  // Fetch previous salary to detect a change
+  const { data: prev } = await supabase.from('finance_profile').select('monthly_salary').eq('user_id', user.id).single()
+
   await supabase.from('finance_profile').upsert(
     { user_id: user.id, monthly_salary: salary, emergency_fund_months: emergencyFundMonths, updated_at: new Date().toISOString() },
     { onConflict: 'user_id' }
   )
+
+  // Record salary change in history when value changes
+  if (salary !== null && salary !== prev?.monthly_salary) {
+    await supabase.from('salary_history').insert({
+      user_id: user.id, amount: salary,
+      effective_date: new Date().toISOString().split('T')[0],
+    })
+  }
+
   revalidatePath('/finance')
 }
 
