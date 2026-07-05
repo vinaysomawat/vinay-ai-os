@@ -1,11 +1,9 @@
 import DashboardView from '@/features/dashboard/components/DashboardView'
 import { getDashboardData } from '@/features/dashboard/actions'
-import { getDailyBriefing } from '@/features/ai/briefing'
+import { getAIRecommendations } from '@/features/ai/recommendations'
 
 export default async function DashboardPage() {
-  const [data, briefing] = await Promise.all([
-    getDashboardData(),
-    getDailyBriefing().catch(() => ''),
-  ])
-  return <DashboardView data={data} briefing={briefing} />
+  const data = await getDashboardData()
+  const recommendations = await getAIRecommendations(data).catch(() => [])
+  return <DashboardView data={data} recommendations={recommendations} />
 }

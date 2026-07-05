@@ -11,9 +11,9 @@ export async function getDashboardData() {
 
   if (!user) return {
     pendingTasks: [], recentApplications: [], botActivity: [],
-    scores: { health: 0, finance: 50, career: 0, learning: 0 },
+    scores: { health: 0, finance: 50, career: 0, learning: 0, projects: 0, life: 0 },
     todayHealth: null,
-    stats: { pendingTaskCount: 0, activeApplications: 0, habitsDoneToday: 0, totalHabits: 0, monthSpend: 0, learningInProgress: 0, activeProjects: 0, documentCount: 0 },
+    stats: { pendingTaskCount: 0, activeApplications: 0, habitsDoneToday: 0, totalHabits: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, activeProjects: 0, completedProjects: 0, documentCount: 0 },
   }
 
   const [
@@ -53,6 +53,7 @@ export async function getDashboardData() {
   const learningInProgress = resources.filter(r => r.status === 'in-progress').length
   const learningCompleted = resources.filter(r => r.status === 'completed').length
   const activeProjects = projects.filter(p => p.status === 'in-progress').length
+  const completedProjects = projects.filter(p => p.status === 'completed').length
 
   // --- Scores ---
   // Health: habits done today + metrics logged today
@@ -87,20 +88,35 @@ export async function getDashboardData() {
     ? Math.min(100, Math.round(((learningCompleted + learningInProgress * 0.5) / resources.length) * 100))
     : 0
 
+  // Projects: reward active + completed work
+  const projectsScore = projects.length === 0 ? 0
+    : Math.min(100, activeProjects * 25 + completedProjects * 20)
+
+  // Life Score: weighted aggregate
+  const lifeScore = Math.round(
+    healthScore   * 0.25 +
+    financeScore  * 0.20 +
+    careerScore   * 0.20 +
+    learningScore * 0.20 +
+    projectsScore * 0.15
+  )
+
   return {
     pendingTasks,
     recentApplications: applications.slice(0, 3),
     botActivity: botLogsRes.data ?? [],
     todayHealth: todayMetric,
-    scores: { health: healthScore, finance: financeScore, career: careerScore, learning: learningScore },
+    scores: { health: healthScore, finance: financeScore, career: careerScore, learning: learningScore, projects: projectsScore, life: lifeScore },
     stats: {
       pendingTaskCount: pendingTasks.length,
       activeApplications: activeApps,
       habitsDoneToday: todayLogs.length,
       totalHabits: habits.length,
       monthSpend,
+      monthBudget,
       learningInProgress,
       activeProjects,
+      completedProjects,
       documentCount: docsRes.count ?? 0,
     },
   }

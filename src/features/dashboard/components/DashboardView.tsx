@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import {
   CalendarDays, Briefcase, DollarSign, HeartPulse,
-  BookOpen, Code2, FileText, Circle, Sparkles, Bot,
+  BookOpen, Code2, FileText, Circle, Bot, Lightbulb,
 } from 'lucide-react'
 import Card from '@/components/Card'
+import ScoreHero from './ScoreHero'
 import { formatDistanceToNow } from 'date-fns'
 import type { getDashboardData } from '../actions'
+import type { Recommendation } from '@/features/ai/recommendations'
 
 const MODULE_META: Record<string, { label: string; emoji: string; color: string; bg: string }> = {
   planner:   { label: 'Planner',   emoji: '📋', color: 'text-blue-400',   bg: 'bg-blue-500/10' },
@@ -14,6 +16,7 @@ const MODULE_META: Record<string, { label: string; emoji: string; color: string;
   health:    { label: 'Health',    emoji: '💪', color: 'text-red-400',    bg: 'bg-red-500/10' },
   learning:  { label: 'Learning',  emoji: '📚', color: 'text-purple-400', bg: 'bg-purple-500/10' },
   coding:    { label: 'Coding',    emoji: '💻', color: 'text-cyan-400',   bg: 'bg-cyan-500/10' },
+  projects:  { label: 'Projects',  emoji: '💻', color: 'text-cyan-400',   bg: 'bg-cyan-500/10' },
   documents: { label: 'Documents', emoji: '📄', color: 'text-orange-400', bg: 'bg-orange-500/10' },
 }
 
@@ -26,44 +29,95 @@ const STATUS_COLOR: Record<string, string> = {
   interview: 'text-purple-400', offer: 'text-green-400', rejected: 'text-red-400',
 }
 
-function scoreColor(s: number) {
-  if (s >= 75) return { bar: 'bg-green-400', text: 'text-green-400' }
-  if (s >= 50) return { bar: 'bg-amber-400', text: 'text-amber-400' }
-  return { bar: 'bg-red-400', text: 'text-red-400' }
-}
-
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>
 
-export default function DashboardView({ data, briefing }: { data: DashboardData; briefing?: string }) {
+function MiniRing({ score, color }: { score: number; color: string }) {
+  const r = 16, circ = 2 * Math.PI * r
+  const dash = (score / 100) * circ
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40" style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx="20" cy="20" r={r} fill="none" stroke="#26263a" strokeWidth="4" />
+      <circle cx="20" cy="20" r={r} fill="none" stroke={color} strokeWidth="4"
+        strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`} strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function computeInsights(
+  stats: DashboardData['stats'],
+  scores: DashboardData['scores'],
+  todayHealth: DashboardData['todayHealth'],
+): string[] {
+  const items: string[] = []
+
+  if (stats.totalHabits > 0) {
+    const rem = stats.totalHabits - stats.habitsDoneToday
+    items.push(rem === 0
+      ? `All ${stats.totalHabits} habits done today`
+      : `${stats.habitsDoneToday}/${stats.totalHabits} habits done — ${rem} remaining`)
+  }
+
+  if ((stats.monthBudget ?? 0) > 0) {
+    const rem = (stats.monthBudget ?? 0) - stats.monthSpend
+    const fmt = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString('en-IN')}`
+    items.push(rem >= 0
+      ? `${fmt(rem)} left in budget this month`
+      : `${fmt(rem)} over budget this month`)
+  }
+
+  if (todayHealth?.sleep_hours && Number(todayHealth.sleep_hours) < 7) {
+    items.push(`Slept ${todayHealth.sleep_hours}h last night — aim for 7–8h`)
+  }
+
+  if (stats.activeApplications > 0) {
+    items.push(`${stats.activeApplications} job application${stats.activeApplications > 1 ? 's' : ''} in the pipeline`)
+  }
+
+  if (stats.pendingTaskCount > 0) {
+    items.push(`${stats.pendingTaskCount} task${stats.pendingTaskCount > 1 ? 's' : ''} pending in Planner`)
+  }
+
+  if (stats.learningInProgress > 0) {
+    items.push(`${stats.learningInProgress} learning resource${stats.learningInProgress > 1 ? 's' : ''} in progress`)
+  }
+
+  if (scores.health < 40 && !todayHealth?.steps) {
+    items.push('Log your steps and water today to boost Health Score')
+  }
+
+  return items.slice(0, 5)
+}
+
+export default function DashboardView({
+  data,
+  recommendations,
+}: {
+  data: DashboardData
+  recommendations: Recommendation[]
+}) {
   const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth } = data
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-  const healthStat = (() => {
-    if (!todayHealth) return stats.totalHabits ? `${stats.habitsDoneToday}/${stats.totalHabits} habits` : 'No habits yet'
-    const parts = []
-    if (todayHealth.weight_kg) parts.push(`${todayHealth.weight_kg}kg`)
-    if (todayHealth.sleep_hours) parts.push(`${todayHealth.sleep_hours}h sleep`)
-    if (todayHealth.steps) parts.push(`${Math.round(Number(todayHealth.steps) / 1000 * 10) / 10}k steps`)
-    return parts.length ? parts.join(' · ') : `${stats.habitsDoneToday}/${stats.totalHabits} habits`
-  })()
+  const insights = computeInsights(stats, scores, todayHealth)
+
+  const moduleScores = [
+    { label: 'Health',   score: scores.health,            color: '#ef4444', to: '/health' },
+    { label: 'Finance',  score: scores.finance,           color: '#22c55e', to: '/finance' },
+    { label: 'Career',   score: scores.career,            color: '#f59e0b', to: '/career' },
+    { label: 'Learning', score: scores.learning,          color: '#a855f7', to: '/learning' },
+    { label: 'Projects', score: scores.projects ?? 0,     color: '#06b6d4', to: '/coding' },
+  ]
 
   const modules = [
     { label: 'Planner',   to: '/planner',   icon: CalendarDays, color: 'text-blue-400',   bg: 'bg-blue-500/10',   stat: stats.pendingTaskCount ? `${stats.pendingTaskCount} pending` : 'All clear' },
     { label: 'Career',    to: '/career',    icon: Briefcase,    color: 'text-amber-400',  bg: 'bg-amber-500/10',  stat: stats.activeApplications ? `${stats.activeApplications} active` : 'No applications' },
-    { label: 'Health',    to: '/health',    icon: HeartPulse,   color: 'text-red-400',    bg: 'bg-red-500/10',    stat: healthStat },
-    { label: 'Finance',   to: '/finance',   icon: DollarSign,   color: 'text-green-400',  bg: 'bg-green-500/10',  stat: stats.monthSpend ? `₹${Math.round(stats.monthSpend).toLocaleString('en-IN')} this month` : 'No expenses yet' },
-    { label: 'Learning',  to: '/learning',  icon: BookOpen,     color: 'text-purple-400', bg: 'bg-purple-500/10', stat: stats.learningInProgress ? `${stats.learningInProgress} in progress` : 'No resources yet' },
-    { label: 'Coding',    to: '/coding',    icon: Code2,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   stat: stats.activeProjects ? `${stats.activeProjects} active` : 'No projects yet' },
+    { label: 'Health',    to: '/health',    icon: HeartPulse,   color: 'text-red-400',    bg: 'bg-red-500/10',    stat: todayHealth?.steps ? `${(Number(todayHealth.steps)/1000).toFixed(1)}k steps` : `${stats.habitsDoneToday}/${stats.totalHabits} habits` },
+    { label: 'Finance',   to: '/finance',   icon: DollarSign,   color: 'text-green-400',  bg: 'bg-green-500/10',  stat: stats.monthSpend ? `₹${Math.round(stats.monthSpend).toLocaleString('en-IN')} spent` : 'No expenses' },
+    { label: 'Learning',  to: '/learning',  icon: BookOpen,     color: 'text-purple-400', bg: 'bg-purple-500/10', stat: stats.learningInProgress ? `${stats.learningInProgress} in progress` : 'No resources' },
+    { label: 'Coding',    to: '/coding',    icon: Code2,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   stat: stats.activeProjects ? `${stats.activeProjects} active` : 'No projects' },
     { label: 'Documents', to: '/documents', icon: FileText,     color: 'text-orange-400', bg: 'bg-orange-500/10', stat: stats.documentCount ? `${stats.documentCount} doc${stats.documentCount !== 1 ? 's' : ''}` : 'Empty' },
-  ]
-
-  const scoreItems = [
-    { label: 'Health',   score: scores.health,   emoji: '💪', to: '/health' },
-    { label: 'Finance',  score: scores.finance,  emoji: '💸', to: '/finance' },
-    { label: 'Career',   score: scores.career,   emoji: '💼', to: '/career' },
-    { label: 'Learning', score: scores.learning, emoji: '📚', to: '/learning' },
   ]
 
   return (
@@ -72,55 +126,107 @@ export default function DashboardView({ data, briefing }: { data: DashboardData;
       <div>
         <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mb-1">{today}</p>
         <h2 className="text-2xl font-bold text-white">{greeting}, Vinay</h2>
+        <p className="text-sm text-slate-500 mt-1">Here&apos;s your Life Intelligence Dashboard</p>
       </div>
 
-      {/* AI Daily Briefing */}
-      {briefing && (
-        <div className="relative bg-gradient-to-br from-accent/10 to-purple-500/5 border border-accent/20 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={15} className="text-accent" />
-            <span className="text-xs font-semibold text-accent uppercase tracking-widest">AI Briefing</span>
+      {/* Hero: Life Score + Module Scores */}
+      <div className="bg-gradient-to-br from-surface-1 via-surface-2 to-surface-1 border border-surface-3 rounded-2xl p-6">
+        <div className="flex flex-col lg:flex-row items-center gap-8">
+          {/* Circular Score */}
+          <div className="shrink-0">
+            <p className="text-xs text-slate-500 uppercase tracking-widest text-center mb-3">Life Score</p>
+            <ScoreHero score={scores.life ?? 0} />
           </div>
-          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{briefing}</p>
+
+          {/* Divider */}
+          <div className="hidden lg:block w-px h-40 bg-surface-3" />
+          <div className="block lg:hidden w-full h-px bg-surface-3" />
+
+          {/* Module Scores */}
+          <div className="flex-1 w-full">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">Module Scores</p>
+            <div className="grid grid-cols-5 gap-2">
+              {moduleScores.map(({ label, score, color, to }) => (
+                <Link key={to} href={to}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 transition-colors group">
+                  <div className="relative">
+                    <MiniRing score={score} color={color} />
+                    <span
+                      className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums"
+                      style={{ color }}>
+                      {score}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 group-hover:text-slate-400 text-center leading-tight">{label}</p>
+                </Link>
+              ))}
+            </div>
+
+            {/* Weights label */}
+            <p className="text-xs text-slate-700 mt-3 text-center">
+              Health 25% · Finance 20% · Career 20% · Learning 20% · Projects 15%
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* AI Recommendations */}
+      {recommendations.length > 0 && (
+        <Card title="Today&apos;s Recommendations" action={
+          <span className="text-xs text-slate-600">AI-powered · updates daily</span>
+        }>
+          <ul className="space-y-2">
+            {recommendations.map((rec, i) => {
+              const meta = MODULE_META[rec.module] ?? MODULE_META['planner']
+              return (
+                <li key={i} className="flex items-center gap-3 p-3 rounded-lg bg-surface-2 border border-surface-3">
+                  <div className={`w-8 h-8 rounded-lg ${meta.bg} flex items-center justify-center shrink-0 text-base`}>
+                    {rec.emoji || meta.emoji}
+                  </div>
+                  <p className="flex-1 text-sm text-slate-300">{rec.action}</p>
+                  <span className="text-xs font-semibold text-accent bg-accent/10 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">
+                    {rec.impact}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
       )}
 
-      {/* Today's Score */}
-      <div>
-        <p className="text-xs text-slate-600 uppercase tracking-widest mb-3">Today&apos;s Score</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {scoreItems.map(({ label, score, emoji, to }) => {
-            const c = scoreColor(score)
-            return (
-              <Link key={to} href={to} className="bg-surface-1 border border-surface-3 rounded-xl p-4 hover:border-accent/30 transition-colors group">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg">{emoji}</span>
-                  <span className={`text-xl font-bold tabular-nums ${c.text}`}>{score}%</span>
-                </div>
-                <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden mb-2">
-                  <div className={`h-full rounded-full transition-all ${c.bar}`} style={{ width: `${score}%` }} />
-                </div>
-                <p className="text-xs text-slate-500 group-hover:text-slate-400 transition-colors">{label}</p>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
+      {/* Insights */}
+      {insights.length > 0 && (
+        <Card title="Insights" action={
+          <Lightbulb size={13} className="text-amber-400" />
+        }>
+          <ul className="space-y-2">
+            {insights.map((insight, i) => (
+              <li key={i} className="flex items-center gap-3 py-2 border-b border-surface-3 last:border-0">
+                <div className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
+                <p className="text-sm text-slate-400">{insight}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Module grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {modules.map(({ label, to, icon: Icon, color, bg, stat }) => (
-          <Link key={to} href={to}
-            className="group flex flex-col gap-3 p-4 bg-surface-1 border border-surface-3 rounded-xl hover:border-accent/40 hover:bg-surface-2 transition-all">
-            <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
-              <Icon size={18} className={color} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{label}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{stat}</p>
-            </div>
-          </Link>
-        ))}
+      <div>
+        <p className="text-xs text-slate-600 uppercase tracking-widest mb-3">Modules</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {modules.map(({ label, to, icon: Icon, color, bg, stat }) => (
+            <Link key={to} href={to}
+              className="group flex flex-col gap-3 p-4 bg-surface-1 border border-surface-3 rounded-xl hover:border-accent/40 hover:bg-surface-2 transition-all">
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
+                <Icon size={18} className={color} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{label}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{stat}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Live data panels */}
@@ -166,7 +272,7 @@ export default function DashboardView({ data, briefing }: { data: DashboardData;
         </Card>
       </div>
 
-      {/* Bot Activity Log */}
+      {/* Bot Activity */}
       <Card title="Bot Activity" action={
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
           <Bot size={12} /><span>Telegram</span>
@@ -194,7 +300,7 @@ export default function DashboardView({ data, briefing }: { data: DashboardData;
                       <span className={`text-xs font-semibold ${meta.color}`}>{meta.label}</span>
                       <span className="text-xs text-slate-700">{timeAgo}</span>
                     </div>
-                    <p className="text-sm text-slate-300 truncate">"{entry.message}"</p>
+                    <p className="text-sm text-slate-300 truncate">&ldquo;{entry.message}&rdquo;</p>
                     {firstLine && <p className="text-xs text-slate-500 mt-0.5 truncate">{firstLine}</p>}
                   </div>
                 </li>
