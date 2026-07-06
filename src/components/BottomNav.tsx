@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import UserInfo from './UserInfo'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -64,6 +65,9 @@ export default function BottomNav() {
                 </Link>
               )
             })}
+            <div className="px-6 pt-2 mt-1 border-t border-surface-3">
+              <UserInfo />
+            </div>
           </div>
         </div>
       )}
