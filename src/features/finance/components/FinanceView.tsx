@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff } from 'lucide-react'
 import Card from '@/components/Card'
 import {
   addExpense, deleteExpense, upsertBudget,
@@ -60,6 +60,7 @@ interface Props {
 
 export default function FinanceView({ expenses, budgets, profile, loans, investments, goals, avgMonthlyExpense, month }: Props) {
   const [, startTransition] = useTransition()
+  const [salaryVisible, setSalaryVisible] = useState(false)
 
   // Local state mirrors (optimistic)
   const [localProfile, setLocalProfile] = useState(profile)
@@ -179,13 +180,22 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       {/* Net Worth Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Monthly Salary</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Monthly Salary</p>
+            <button onClick={() => setSalaryVisible(v => !v)} className="text-slate-600 hover:text-slate-400 transition-colors">
+              {salaryVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+            </button>
+          </div>
           <div className="text-xl font-bold text-slate-200">
-            <InlineEdit
-              value={salary ? Math.round(salary).toString() : ''}
-              placeholder="Set salary"
-              onSave={handleSalary}
-            />
+            {salaryVisible ? (
+              <InlineEdit
+                value={salary ? Math.round(salary).toString() : ''}
+                placeholder="Set salary"
+                onSave={handleSalary}
+              />
+            ) : (
+              <span className="tracking-widest">••••••</span>
+            )}
           </div>
         </div>
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4">
@@ -211,7 +221,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       <div className="bg-surface-1 border border-surface-3 rounded-xl p-4">
         <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Monthly Cash Flow</p>
         <div className="flex items-center gap-3 flex-wrap text-sm">
-          <span className="text-green-400 font-medium">{fmt(salary)}</span>
+          <span className="text-green-400 font-medium">{salaryVisible ? fmt(salary) : '••••••'}</span>
           <span className="text-slate-600">salary</span>
           <span className="text-slate-600">−</span>
           <span className="text-red-400 font-medium">{fmt(totalEMIs)}</span>
