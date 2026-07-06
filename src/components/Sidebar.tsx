@@ -12,14 +12,12 @@ import {
   FileText,
   LayoutDashboard,
   Cpu,
-  Sparkles,
   Search,
 } from 'lucide-react'
 import UserInfo from './UserInfo'
 
 const nav = [
   { label: 'Dashboard',       to: '/dashboard',       icon: LayoutDashboard },
-  { label: 'Recommendations', to: '/recommendations', icon: Sparkles },
   { label: 'Search',          to: '/search',          icon: Search },
   { label: 'Planner',         to: '/planner',         icon: CalendarDays },
   { label: 'Career', to: '/career', icon: Briefcase },

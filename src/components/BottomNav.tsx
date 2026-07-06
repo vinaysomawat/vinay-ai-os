@@ -11,7 +11,6 @@ import {
   DollarSign,
   Search,
   MoreHorizontal,
-  Sparkles,
   Briefcase,
   BookOpen,
   Code2,
@@ -27,11 +26,10 @@ const primaryNav = [
 ]
 
 const moreNav = [
-  { label: 'Recommendations', to: '/recommendations', icon: Sparkles },
-  { label: 'Career',          to: '/career',          icon: Briefcase },
-  { label: 'Learning',        to: '/learning',         icon: BookOpen },
-  { label: 'Coding',          to: '/coding',           icon: Code2 },
-  { label: 'Documents',       to: '/documents',        icon: FileText },
+  { label: 'Career',    to: '/career',    icon: Briefcase },
+  { label: 'Learning',  to: '/learning',  icon: BookOpen },
+  { label: 'Coding',    to: '/coding',    icon: Code2 },
+  { label: 'Documents', to: '/documents', icon: FileText },
 ]
 
 export default function BottomNav() {

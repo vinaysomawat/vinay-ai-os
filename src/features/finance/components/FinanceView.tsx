@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import {
   addExpense, deleteExpense, upsertBudget,
   upsertProfile, addLoan, deleteLoan,
@@ -96,6 +97,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const totalSpent = localExpenses.reduce((s, e) => s + Number(e.amount), 0)
   const totalBudget = localBudgets.reduce((s, b) => s + Number(b.amount), 0)
   const remaining = totalBudget - totalSpent
+
+  const financeContext = `Net worth: ₹${Math.round(netWorth).toLocaleString('en-IN')}. Portfolio: ₹${Math.round(portfolio).toLocaleString('en-IN')} across ${localInvestments.length} investments. Total debt: ₹${Math.round(totalDebt).toLocaleString('en-IN')} (₹${Math.round(totalEMIs).toLocaleString('en-IN')}/mo EMI across ${localLoans.length} loans). This month: ₹${Math.round(totalSpent).toLocaleString('en-IN')} spent of ₹${Math.round(totalBudget).toLocaleString('en-IN')} budgeted (${remaining >= 0 ? `₹${Math.round(remaining).toLocaleString('en-IN')} left` : `₹${Math.round(Math.abs(remaining)).toLocaleString('en-IN')} over`}). Free cash flow: ₹${Math.round(freeCash).toLocaleString('en-IN')}/mo. Goals: ${localGoals.length ? localGoals.map(g => `${g.name} (₹${Math.round(g.current_amount).toLocaleString('en-IN')}/₹${Math.round(g.target_amount).toLocaleString('en-IN')})`).join(', ') : 'none set'}.`
 
   const byCategory = CATEGORIES.map(cat => {
     const spent = localExpenses.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0)
@@ -423,6 +426,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           </div>
         )}
       </div>
+
+      <ModuleRecommendations moduleLabel="Finance" context={financeContext} />
 
       {/* Expenses + Budgets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

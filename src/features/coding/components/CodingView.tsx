@@ -3,6 +3,7 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, ExternalLink, Github, X } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addProject, updateProjectStatus, deleteProject } from '../actions'
 import type { Project, ProjectStatus } from '../types'
 
@@ -124,6 +125,8 @@ export default function CodingView({ initialProjects }: Props) {
           })}
         </ul>
       </Card>
+
+      <ModuleRecommendations moduleLabel="Coding" context={`Projects tracked: ${projects.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Active projects: ${projects.filter(p => p.status === 'in-progress').map(p => `${p.name} (${p.stack.join(', ')})`).join('; ') || 'none'}.`} />
 
       {showForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

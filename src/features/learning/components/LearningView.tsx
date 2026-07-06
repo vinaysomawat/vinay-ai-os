@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Flame, BookOpen } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addResource, updateResource, deleteResource, logStudySession } from '../actions'
 import { getDailyStudyPlan, generateResourceQuiz } from '@/features/ai/study-plan'
 import type { Resource, ResourceStatus, ResourceType, StudyLog } from '../types'
@@ -165,6 +166,8 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
           </div>
         )}
       </div>
+
+      <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}.`} />
 
       {/* Status filter + Resource list */}
       <div className="flex gap-2 flex-wrap">

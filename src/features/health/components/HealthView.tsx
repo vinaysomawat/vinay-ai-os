@@ -3,6 +3,7 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, X, Flame, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addHabit, logHabit, unlogHabit, deleteHabit, upsertTodayMetric } from '../actions'
 import { getHealthReport } from '@/features/ai/health-report'
 import { calculateBMR, calculateTDEE, calculateWeightLossPlan, calculateHealthScore } from '../calculations'
@@ -355,6 +356,8 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
           </div>
         )}
       </div>
+
+      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml. Habits today: ${completedToday}/${habits.length} done. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
 
       {/* Habit tracker */}
       <Card title="Weekly Habits" action={

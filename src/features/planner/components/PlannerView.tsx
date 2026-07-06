@@ -3,6 +3,7 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, CheckCircle2, Circle, Trash2, Sparkles } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addTask, toggleTask, deleteTask } from '../actions'
 import { smartSortTasks, getFocusTask } from '@/features/ai/smart-sort'
 import { RefreshCw } from 'lucide-react'
@@ -52,6 +53,9 @@ export default function PlannerView({ initialTasks }: Props) {
 
   const pending = optimisticTasks.filter(t => !t.done)
   const done = optimisticTasks.filter(t => t.done)
+  const highPriorityPending = pending.filter(t => t.priority === 'high').length
+  const overdue = pending.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0]).length
+  const plannerContext = `Pending tasks: ${pending.length} (${highPriorityPending} high priority, ${overdue} overdue). Completed today/recently: ${done.length}. Task list: ${pending.slice(0, 10).map(t => `"${t.text}" (${t.priority}${t.due_date ? `, due ${t.due_date}` : ''})`).join('; ') || 'none'}.`
 
   const handleAdd = () => {
     if (!input.trim()) return
@@ -252,6 +256,8 @@ export default function PlannerView({ initialTasks }: Props) {
           </details>
         )}
       </Card>
+
+      <ModuleRecommendations moduleLabel="Planner" context={plannerContext} />
     </div>
   )
 }

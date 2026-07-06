@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Pencil, Check, Wand2 } from 'lucide-react'
 import Card from '@/components/Card'
+import ModuleRecommendations from '@/components/ModuleRecommendations'
 import {
   addApplication, updateStatus, deleteApplication,
   upsertCareerProfile, addSkill, updateSkillLevel, deleteSkill,
@@ -88,6 +89,8 @@ export default function CareerView({ applications, profile, skills, qa }: Props)
     acc[s.category] = [...(acc[s.category] ?? []), s]
     return acc
   }, {})
+
+  const careerContext = `Current role: ${localProfile?.current_role ?? 'not set'} at ${localProfile?.current_company ?? 'not set'}. Target role: ${localProfile?.target_role ?? 'not set'}. Years experience: ${localProfile?.years_experience ?? 'not set'}. Active applications: ${localApps.length} (${STATUSES.map(s => `${counts[s]} ${s}`).join(', ')}). Skills tracked: ${localSkills.length}. Interview Q&A prepared: ${localQA.length}.`
 
   const saveProfile = (field: keyof CareerProfile, raw: string) => {
     const value = ['current_salary', 'years_experience'].includes(field) ? (parseFloat(raw) || null) : raw
@@ -234,6 +237,8 @@ export default function CareerView({ applications, profile, skills, qa }: Props)
           </div>
         )}
       </div>
+
+      <ModuleRecommendations moduleLabel="Career" context={careerContext} />
 
       {/* Interview Q&A Bank */}
       <Card title={`Interview Q&A (${localQA.length})`} action={
