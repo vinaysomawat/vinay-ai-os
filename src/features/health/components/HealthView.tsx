@@ -1,11 +1,16 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, Trash2, X, Flame, Sparkles, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, X, Flame, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
 import Card from '@/components/Card'
 import { addHabit, logHabit, unlogHabit, deleteHabit, upsertTodayMetric } from '../actions'
 import { getHealthReport } from '@/features/ai/health-report'
-import type { HabitWithLogs, HealthMetric, MetricField } from '../types'
+import { calculateBMR, calculateTDEE, calculateWeightLossPlan, calculateHealthScore } from '../calculations'
+import HealthProfileForm from './HealthProfileForm'
+import HealthScoreHero from './HealthScoreHero'
+import TodaysPlanCard from './TodaysPlanCard'
+import MetricChart from './MetricChart'
+import type { HabitWithLogs, HealthMetric, MetricField, HealthProfile } from '../types'
 
 const ICONS = ['🏋️', '💧', '😴', '🧘', '📚', '🏃', '🥗', '💊', '🚴', '✍️']
 
@@ -39,42 +44,10 @@ function getStreak(logs: { date: string }[]): number {
   return streak
 }
 
-function WeightChart({ metrics }: { metrics: HealthMetric[] }) {
-  const withWeight = [...metrics].filter(m => m.weight_kg !== null).sort((a, b) => a.date.localeCompare(b.date)).slice(-14)
-  if (withWeight.length < 2) return (
-    <p className="text-xs text-slate-600 py-2">Log weight on 2+ days to see trend</p>
-  )
-  const weights = withWeight.map(m => m.weight_kg!)
-  const min = Math.min(...weights)
-  const max = Math.max(...weights)
-  const range = max - min || 0.1
-  const trend = weights[weights.length - 1] - weights[0]
-
-  return (
-    <div>
-      <div className="flex items-end gap-1 h-14">
-        {withWeight.map((m, i) => {
-          const h = Math.round(((m.weight_kg! - min) / range) * 44 + 4)
-          const isLatest = i === withWeight.length - 1
-          return (
-            <div key={m.date} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-              <div className={`w-full rounded-sm transition-all ${isLatest ? 'bg-accent' : 'bg-surface-3'}`} style={{ height: `${h}px` }} />
-              <span className="text-xs text-slate-700 hidden sm:block">{new Date(m.date + 'T12:00:00').getDate()}</span>
-            </div>
-          )
-        })}
-      </div>
-      <p className={`text-xs mt-2 font-medium ${trend < 0 ? 'text-green-400' : trend > 0 ? 'text-red-400' : 'text-slate-500'}`}>
-        {trend < 0 ? `↓ ${Math.abs(trend).toFixed(1)} kg` : trend > 0 ? `↑ ${trend.toFixed(1)} kg` : '→ Stable'} over {withWeight.length} days
-        <span className="text-slate-600 font-normal ml-2">· Latest: {weights[weights.length - 1]} kg</span>
-      </p>
-    </div>
-  )
-}
-
-function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekAvg, onSave, saving }: {
+function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekAvg, onSave, saving, leftText }: {
   field: MetricField; label: string; emoji: string; unit: string; decimals?: number
   todayValue: number | null; weekAvg: number | null; onSave: (v: number) => void; saving: boolean
+  leftText?: string | null
 }) {
   const [input, setInput] = useState(todayValue !== null ? String(todayValue) : '')
   const [saved, setSaved] = useState(false)
@@ -110,6 +83,7 @@ function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekA
         </div>
       </div>
       <p className="text-xs text-slate-700">7d avg: {weekAvg !== null ? weekAvg.toFixed(decimals) : '—'}</p>
+      {leftText && <p className="text-xs text-accent font-medium">{leftText}</p>}
     </div>
   )
 }
@@ -117,9 +91,10 @@ function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekA
 interface Props {
   initialHabits: HabitWithLogs[]
   initialMetrics: HealthMetric[]
+  initialProfile: HealthProfile | null
 }
 
-export default function HealthView({ initialHabits, initialMetrics }: Props) {
+export default function HealthView({ initialHabits, initialMetrics, initialProfile }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('🏋️')
@@ -129,6 +104,8 @@ export default function HealthView({ initialHabits, initialMetrics }: Props) {
   const [aiReport, setAiReport] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [showAI, setShowAI] = useState(false)
+  const [profile, setProfile] = useState<HealthProfile | null>(initialProfile)
+  const [showProfileForm, setShowProfileForm] = useState(false)
 
   const days = getLast7Days()
   const today = days[6]
@@ -140,6 +117,20 @@ export default function HealthView({ initialHabits, initialMetrics }: Props) {
     const vals = week.map(m => m[field]).filter((v): v is number => v !== null)
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
   }
+
+  const latestWeight = todayMetric?.weight_kg
+    ?? [...metrics].filter(m => m.weight_kg !== null).sort((a, b) => b.date.localeCompare(a.date))[0]?.weight_kg
+    ?? null
+
+  const canCalculate = !!profile && profile.age && profile.gender && profile.height_cm && profile.target_weight_kg && profile.activity_level && latestWeight
+  const weightLossPlan = canCalculate
+    ? calculateWeightLossPlan(
+        latestWeight!,
+        profile!.target_weight_kg!,
+        calculateTDEE(calculateBMR(latestWeight!, profile!.height_cm!, profile!.age!, profile!.gender!), profile!.activity_level!),
+        profile!.goal_deadline
+      )
+    : null
 
   const handleMetricSave = (field: MetricField, value: number) => {
     setSaving(field)
@@ -196,8 +187,84 @@ export default function HealthView({ initialHabits, initialMetrics }: Props) {
   const completedToday = habits.filter(h => h.logs.some(l => l.date === today)).length
   const bestStreak = habits.length > 0 ? Math.max(...habits.map(h => getStreak(h.logs))) : 0
 
+  const healthScore = weightLossPlan
+    ? calculateHealthScore(
+        todayMetric,
+        { calories: weightLossPlan.dailyCalorieTarget, protein: weightLossPlan.proteinTargetG, steps: 10000 },
+        habits,
+        today
+      )
+    : null
+
+  const leftText = (field: MetricField): string | null => {
+    if (!weightLossPlan) return null
+    const value = todayMetric?.[field]
+    if (field === 'calories') return `${Math.max(0, weightLossPlan.dailyCalorieTarget - (value ?? 0))} kcal left of ${weightLossPlan.dailyCalorieTarget}`
+    if (field === 'protein_g') return `${Math.max(0, weightLossPlan.proteinTargetG - (value ?? 0))}g left of ${weightLossPlan.proteinTargetG}g`
+    if (field === 'water_ml') return `${Math.max(0, 3000 - (value ?? 0))}ml left of 3000ml`
+    if (field === 'steps') return `${Math.max(0, 10000 - (value ?? 0))} steps left of 10,000`
+    return null
+  }
+
   return (
     <div className="space-y-5">
+      {/* Health profile setup / edit */}
+      {!profile ? (
+        <div className="bg-gradient-to-br from-accent/10 to-transparent border border-accent/30 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Set up your Health Profile</p>
+            <p className="text-xs text-slate-500 mt-1">One-time setup unlocks your calorie targets, macros, and a real Health Score.</p>
+          </div>
+          <button onClick={() => setShowProfileForm(true)} className="shrink-0 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">
+            Set up
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <button onClick={() => setShowProfileForm(true)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+            <Settings2 size={12} /> Edit health profile
+          </button>
+        </div>
+      )}
+
+      {showProfileForm && (
+        <HealthProfileForm
+          profile={profile}
+          onClose={() => setShowProfileForm(false)}
+          onSaved={p => { setProfile(p); setShowProfileForm(false) }}
+        />
+      )}
+
+      {/* Health Score + Today's Plan */}
+      {profile && weightLossPlan && healthScore && (
+        <>
+          <HealthScoreHero score={healthScore} />
+          <TodaysPlanCard profile={profile} plan={weightLossPlan} todayMetric={todayMetric} habits={habits} score={healthScore} today={today} />
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div>
+              <p className="text-lg font-bold text-white">{weightLossPlan.dailyCalorieTarget}</p>
+              <p className="text-xs text-slate-500">kcal target</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{weightLossPlan.proteinTargetG}g</p>
+              <p className="text-xs text-slate-500">protein target</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{weightLossPlan.weeklyLossKg}kg</p>
+              <p className="text-xs text-slate-500">per week</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{weightLossPlan.daysRemaining}d</p>
+              <p className="text-xs text-slate-500">to {profile.target_weight_kg}kg ({weightLossPlan.expectedGoalDate})</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {profile && !weightLossPlan && (
+        <p className="text-xs text-slate-600 -mt-2">Log today&apos;s weight below to unlock your calorie targets and Health Score.</p>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
@@ -229,6 +296,7 @@ export default function HealthView({ initialHabits, initialMetrics }: Props) {
               weekAvg={weekAvg(m.field)}
               onSave={v => handleMetricSave(m.field, v)}
               saving={saving === m.field}
+              leftText={leftText(m.field)}
             />
           ))}
         </div>
@@ -236,7 +304,29 @@ export default function HealthView({ initialHabits, initialMetrics }: Props) {
 
       {/* Weight trend */}
       <Card title="Weight Trend">
-        <WeightChart metrics={metrics} />
+        <MetricChart metrics={metrics} field="weight_kg" label="Weight" unit="kg" decimals={1} lowerIsBetter />
+      </Card>
+
+      {/* Progress */}
+      <Card title="Progress">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Calories</p>
+            <MetricChart metrics={metrics} field="calories" label="Calories" unit="kcal" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Protein</p>
+            <MetricChart metrics={metrics} field="protein_g" label="Protein" unit="g" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Sleep</p>
+            <MetricChart metrics={metrics} field="sleep_hours" label="Sleep" unit="hrs" decimals={1} />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Steps</p>
+            <MetricChart metrics={metrics} field="steps" label="Steps" unit="steps" />
+          </div>
+        </div>
       </Card>
 
       {/* AI Health Coach */}

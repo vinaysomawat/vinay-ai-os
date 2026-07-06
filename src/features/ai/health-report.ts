@@ -1,7 +1,8 @@
 'use server'
 
 import { aiText } from '@/lib/anthropic'
-import type { HealthMetric } from '@/features/health/types'
+import type { HealthMetric, HealthProfile, HabitWithLogs } from '@/features/health/types'
+import type { WeightLossPlan, HealthScoreBreakdown } from '@/features/health/calculations'
 
 export async function getHealthReport(metrics: HealthMetric[]): Promise<string> {
   if (metrics.length === 0) return 'No health data yet. Start logging your metrics daily and I can analyse your trends.'
@@ -38,4 +39,35 @@ Write a weekly health report with:
 Be encouraging but direct. Reference actual numbers. Keep it under 200 words.`
 
   return aiText(prompt, "You are Vinay's personal health coach. Give sharp, data-driven feedback. No generic advice — reference his specific numbers.")
+}
+
+export async function getDailyHealthPlan(
+  profile: HealthProfile,
+  plan: WeightLossPlan,
+  todayMetric: HealthMetric | null,
+  habits: HabitWithLogs[],
+  score: HealthScoreBreakdown,
+  today: string
+): Promise<string> {
+  const caloriesLeft = plan.dailyCalorieTarget - (todayMetric?.calories ?? 0)
+  const proteinLeft = plan.proteinTargetG - (todayMetric?.protein_g ?? 0)
+  const waterLeft = 3000 - (todayMetric?.water_ml ?? 0)
+  const stepsLogged = todayMetric?.steps ?? 0
+  const habitsStatus = habits.map(h => `${h.name}: ${h.logs.some(l => l.date === today) ? 'done' : 'not done'}`).join(', ') || 'no habits set up'
+
+  const prompt = `Vinay's daily health plan for today. His goal: lose weight from his current weight toward ${profile.target_weight_kg}kg by ${plan.expectedGoalDate} (${plan.daysRemaining} days away, ~${plan.weeklyLossKg}kg/week).
+
+Today's targets: ${plan.dailyCalorieTarget} kcal, ${plan.proteinTargetG}g protein, ${plan.carbsG}g carbs, ${plan.fatG}g fat.
+
+Logged so far today: calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${stepsLogged}, water=${todayMetric?.water_ml ?? 'not logged'}ml, sleep last night=${todayMetric?.sleep_hours ?? 'not logged'}h.
+
+Remaining today: ${caloriesLeft > 0 ? `${caloriesLeft} kcal left` : 'calorie budget used up'}, ${proteinLeft > 0 ? `${proteinLeft}g protein left` : 'protein target hit'}, ${waterLeft > 0 ? `${waterLeft}ml water left` : 'water target hit'}.
+
+Habits today: ${habitsStatus}.
+
+Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score} — ${score.nutrition.reason}; Sleep ${score.sleep.score} — ${score.sleep.reason}; Activity ${score.activity.score} — ${score.activity.reason}; Consistency ${score.consistency.score} — ${score.consistency.reason}).
+
+Write today's action plan as a short checklist (6-8 lines, each starting with an emoji), covering what's left to eat, water, steps/workout, and sleep timing. End with one sentence explaining why these matter for hitting his weight goal on time. Be specific to the numbers above — no generic advice. Plain text only — no markdown (no **, no #, no bullet dashes). Keep it under 150 words.`
+
+  return aiText(prompt, "You are Vinay's personal fitness and nutrition coach. Be specific, data-driven, and direct. Reference his actual numbers, not generic tips.")
 }

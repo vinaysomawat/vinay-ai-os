@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import type { MetricField } from './types'
+import type { MetricField, ActivityLevel, Gender } from './types'
 
 export async function getHabitsWithLogs() {
   const supabase = await createClient()
@@ -80,6 +80,37 @@ export async function unlogHabit(habitId: string, date: string) {
 export async function deleteHabit(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('habits').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/health')
+}
+
+export async function getHealthProfile() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data } = await supabase.from('health_profile').select('*').eq('user_id', user.id).single()
+  return data
+}
+
+export async function upsertHealthProfile(profile: {
+  age: number | null
+  gender: Gender | null
+  height_cm: number | null
+  target_weight_kg: number | null
+  activity_level: ActivityLevel | null
+  workout_days_per_week: number | null
+  food_preference: string | null
+  goal_deadline: string | null
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase.from('health_profile').upsert(
+    { user_id: user.id, ...profile, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  )
   if (error) throw new Error(error.message)
   revalidatePath('/health')
 }
