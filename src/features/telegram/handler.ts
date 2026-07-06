@@ -70,7 +70,9 @@ export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdat
   let reply = ''
 
   try {
-    const raw = await aiText(text, mod.SYSTEM_PROMPT)
+    const todayStr = new Date().toISOString().split('T')[0]
+    const systemPrompt = `${mod.SYSTEM_PROMPT}\n\nToday's actual date is ${todayStr} (YYYY-MM-DD). Always use this for "today", "now", or any relative date/default date — never guess or use a date from your training data.`
+    const raw = await aiText(text, systemPrompt)
     const match = raw.match(/\{[\s\S]*\}/)
     if (match) action = JSON.parse(match[0])
   } catch {
