@@ -4,8 +4,13 @@ import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, ExternalLink, Github, X } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
+import DailyCodingCard from './DailyCodingCard'
+import CodingCalendar from './CodingCalendar'
+import CodingSettingsPopover from './CodingSettingsPopover'
+import QuestionHistory from './QuestionHistory'
 import { addProject, updateProjectStatus, deleteProject } from '../actions'
 import type { Project, ProjectStatus } from '../types'
+import type { DailyQuestion, CodingStats, CalendarDay, CodingSettings } from '../daily-core'
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: string }> = {
   'idea':        { label: 'Idea',        color: 'text-slate-400',  bg: 'bg-slate-500/15' },
@@ -16,9 +21,16 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: s
 
 const STATUSES = Object.keys(STATUS_CONFIG) as ProjectStatus[]
 
-interface Props { initialProjects: Project[] }
+interface Props {
+  initialProjects: Project[]
+  dailyAssignment: DailyQuestion[]
+  codingStats: CodingStats
+  calendar: CalendarDay[]
+  codingSettings: CodingSettings
+  history: DailyQuestion[]
+}
 
-export default function CodingView({ initialProjects }: Props) {
+export default function CodingView({ initialProjects, dailyAssignment, codingStats, calendar, codingSettings, history }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState<ProjectStatus | 'all'>('all')
   const [isPending, startTransition] = useTransition()
@@ -71,6 +83,14 @@ export default function CodingView({ initialProjects }: Props) {
 
   return (
     <div className="space-y-5">
+      <DailyCodingCard initialAssignment={dailyAssignment} stats={codingStats} />
+
+      <Card title="Contribution Calendar" action={<CodingSettingsPopover initialSettings={codingSettings} />}>
+        <CodingCalendar days={calendar} />
+      </Card>
+
+      <QuestionHistory initialHistory={history} />
+
       {/* Status filter */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === 'all' ? 'bg-accent text-white' : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>

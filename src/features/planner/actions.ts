@@ -50,7 +50,14 @@ export async function toggleTask(id: string, done: boolean) {
 
   const { error } = await supabase.from('tasks').update({ done }).eq('id', id)
   if (error) throw new Error(error.message)
+
+  // Two-way sync: if this task was auto-created for a coding practice question, keep it in sync
+  await supabase.from('coding_daily_questions')
+    .update({ completed: done, completed_at: done ? new Date().toISOString() : null })
+    .eq('task_id', id)
+
   revalidatePath('/planner')
+  revalidatePath('/coding')
 }
 
 export async function deleteTask(id: string) {

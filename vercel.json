@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/weekly-digest",
       "schedule": "30 2 * * 0"
+    },
+    {
+      "path": "/api/cron/daily-coding",
+      "schedule": "5 3 * * *"
     }
   ]
 }

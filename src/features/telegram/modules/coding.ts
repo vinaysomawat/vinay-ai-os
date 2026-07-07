@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { generateAssignmentForUser, getTodayAssignmentRows } from '@/features/coding/daily-core'
 
 export const SYSTEM_PROMPT = `You are the Coding bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
 
@@ -7,12 +8,16 @@ Actions:
 {"action":"update_status","search":"project name","status":"idea"|"in-progress"|"paused"|"completed"}
 {"action":"list_projects","filter":"all"|"idea"|"in-progress"|"paused"|"completed"}
 {"action":"add_note","search":"project name","note":"note text"}
+{"action":"today_question"}
+{"action":"complete_question","search":"partial question title"}
 {"action":"help"}
 
 Rules:
 - stack is an array of tech names extracted from the message
 - Default status: "idea"
-- If user says "started working on X" → status "in-progress"`
+- If user says "started working on X" → status "in-progress"
+- For "today's question", "what's my coding challenge" → today_question
+- For "solved X", "finished X", "done with X" (referring to a coding practice question, not a project) → complete_question`
 
 const SE = { idea: '💡', 'in-progress': '⚡', paused: '⏸️', completed: '✅' } as Record<string, string>
 
@@ -47,7 +52,25 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
       await db.from('projects').update({ description: newDesc }).eq('id', p.id)
       return `📝 Note added to *${p.name}*`
     }
+    case 'today_question': {
+      const rows = await generateAssignmentForUser(db, userId)
+      if (rows.length === 0) return `🧘 No new questions today — it's a revision day (or your pool is empty).`
+      const DE: Record<string, string> = { easy: '🟢', medium: '🟡', hard: '🔴' }
+      return `💻 *Today's Coding Challenge:*\n\n` + rows.map(r =>
+        `${r.completed ? '✅' : DE[r.question.difficulty] ?? ''} *${r.question.title}* _(${r.question.difficulty})_${r.completed ? ' — done' : ''}\n${r.question.url}`
+      ).join('\n\n')
+    }
+    case 'complete_question': {
+      const rows = await getTodayAssignmentRows(db, userId)
+      const search = String(action.search ?? '').toLowerCase()
+      const match = rows.find(r => r.question.title.toLowerCase().includes(search) || search.includes(r.question.title.toLowerCase()))
+      if (!match) return `❌ No question matching "${action.search}" in today's assignment.`
+      if (match.completed) return `Already marked *${match.question.title}* as done! 🎉`
+      await db.from('coding_daily_questions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', match.id)
+      if (match.task_id) await db.from('tasks').update({ done: true }).eq('id', match.task_id)
+      return `🎉 Nice work! Marked *${match.question.title}* as solved.`
+    }
     default:
-      return `*Coding Bot — What I can do:*\n• "add project Portfolio with Next.js and Tailwind"\n• "started working on Portfolio"\n• "show in-progress projects"\n• "Portfolio is done"\n• "add note to Portfolio: deploy to Vercel next"`
+      return `*Coding Bot — What I can do:*\n• "add project Portfolio with Next.js and Tailwind"\n• "started working on Portfolio"\n• "show in-progress projects"\n• "Portfolio is done"\n• "add note to Portfolio: deploy to Vercel next"\n• "today's question"\n• "solved Two Sum"`
   }
 }
