@@ -2,6 +2,75 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+export interface TopAction {
+  emoji: string
+  text: string
+  href: string
+}
+
+interface TopActionInput {
+  today: string
+  pendingTasks: { text: string; priority: string; due_date: string | null }[]
+  applications: { status: string }[]
+  monthSpend: number
+  monthBudget: number
+  todayMetric: Record<string, unknown> | null
+  habitsTotal: number
+  habitsDoneToday: number
+}
+
+// Deterministic ranking — no AI call. Per Product Principles (CLAUDE.md):
+// "reduce decisions, don't just surface data" — surface the 3 highest-impact
+// actions instead of a wall of stat cards.
+function computeTopActions(input: TopActionInput): TopAction[] {
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, habitsTotal, habitsDoneToday } = input
+  const candidates: (TopAction & { score: number })[] = []
+
+  const overdue = pendingTasks.filter(t => t.due_date && t.due_date < today)
+  if (overdue.length > 0) {
+    candidates.push({
+      score: 100, emoji: '🔴', href: '/planner',
+      text: `${overdue.length} task${overdue.length > 1 ? 's' : ''} overdue — clear ${overdue.length > 1 ? 'these' : 'this'} first`,
+    })
+  }
+
+  const interviewApps = applications.filter(a => a.status === 'interview')
+  if (interviewApps.length > 0) {
+    candidates.push({
+      score: 90, emoji: '🎯', href: '/career',
+      text: `${interviewApps.length} application${interviewApps.length > 1 ? 's' : ''} at interview stage — prep now`,
+    })
+  }
+
+  if (monthBudget > 0) {
+    const ratio = monthSpend / monthBudget
+    if (ratio >= 1) {
+      candidates.push({ score: 80, emoji: '💸', href: '/finance', text: `Over budget this month by ₹${Math.round(monthSpend - monthBudget).toLocaleString('en-IN')}` })
+    } else if (ratio >= 0.9) {
+      candidates.push({ score: 55, emoji: '💸', href: '/finance', text: `${Math.round(ratio * 100)}% of monthly budget used` })
+    }
+  }
+
+  const highPriorityPending = pendingTasks.filter(t => t.priority === 'high' && !(t.due_date && t.due_date < today))
+  if (highPriorityPending.length > 0) {
+    candidates.push({
+      score: 70, emoji: '⚡', href: '/planner',
+      text: `${highPriorityPending.length} high-priority task${highPriorityPending.length > 1 ? 's' : ''} pending`,
+    })
+  }
+
+  const metricsLoggedToday = !!todayMetric && ['weight_kg', 'calories', 'steps'].some(k => todayMetric[k] != null)
+  if (!metricsLoggedToday) {
+    candidates.push({ score: 50, emoji: '📊', href: '/health', text: 'No health metrics logged today' })
+  }
+
+  if (habitsTotal > 0 && habitsDoneToday === 0) {
+    candidates.push({ score: 40, emoji: '💪', href: '/health', text: `0/${habitsTotal} habits done today` })
+  }
+
+  return candidates.sort((a, b) => b.score - a.score).slice(0, 3).map(c => ({ emoji: c.emoji, text: c.text, href: c.href }))
+}
+
 export async function getDashboardData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -16,14 +85,17 @@ export async function getDashboardData() {
     scoreHistory: [] as { date: string; life: number; health: number; finance: number; career: number; learning: number; projects: number }[],
     gamification: { xp: 0, level: 1, xpProgress: 0, streak: 0, badges: [] as string[] },
     stats: { pendingTaskCount: 0, activeApplications: 0, habitsDoneToday: 0, totalHabits: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, activeProjects: 0, completedProjects: 0, githubCommits: 0, documentCount: 0 },
+    aiBudget: { callsToday: 0, costTodayUsd: 0, callsMonth: 0, costMonthUsd: 0, cacheHitRateMonth: 0 },
+    topActions: [] as TopAction[],
   }
 
   const [
     tasksRes, appsRes, habitsRes, logsRes,
     expensesRes, budgetsRes, resourcesRes, projectsRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
+    aiUsageMonthRes,
   ] = await Promise.all([
-    supabase.from('tasks').select('id, text, done, priority').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
+    supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('habits').select('id').eq('user_id', user.id),
     supabase.from('habit_logs').select('habit_id').eq('user_id', user.id).eq('date', today), // fixed: was logged_date
@@ -37,6 +109,7 @@ export async function getDashboardData() {
     supabase.from('career_profile').select('current_role, target_role').eq('user_id', user.id).single(),
     supabase.from('skills').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('interview_qa').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('ai_usage_logs').select('estimated_cost_usd, cache_hit, created_at').eq('user_id', user.id).gte('created_at', `${monthStart}T00:00:00.000Z`),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -177,6 +250,22 @@ export async function getDashboardData() {
   if (lifeScore >= 90)      badges.push('💎 Elite')
   if (totalXP >= 1000)      badges.push('🎯 1K XP Club')
 
+  // --- AI spend (from ai_usage_logs, written by the AI Gateway) ---
+  const aiUsageMonth = aiUsageMonthRes.data ?? []
+  const aiUsageToday = aiUsageMonth.filter(r => (r.created_at as string) >= `${today}T00:00:00.000Z`)
+  const aiBudget = {
+    callsToday: aiUsageToday.length,
+    costTodayUsd: aiUsageToday.reduce((s, r) => s + Number(r.estimated_cost_usd), 0),
+    callsMonth: aiUsageMonth.length,
+    costMonthUsd: aiUsageMonth.reduce((s, r) => s + Number(r.estimated_cost_usd), 0),
+    cacheHitRateMonth: aiUsageMonth.length ? Math.round((aiUsageMonth.filter(r => r.cache_hit).length / aiUsageMonth.length) * 100) : 0,
+  }
+
+  const topActions = computeTopActions({
+    today, pendingTasks, applications, monthSpend, monthBudget, todayMetric,
+    habitsTotal: habits.length, habitsDoneToday: todayLogs.length,
+  })
+
   // Upsert XP record
   await supabase.from('user_xp').upsert(
     { user_id: user.id, xp: totalXP, level: xpLevel, badges, updated_at: new Date().toISOString() },
@@ -201,5 +290,7 @@ export async function getDashboardData() {
       githubCommits,
       documentCount: docsRes.count ?? 0,
     },
+    aiBudget,
+    topActions,
   }
 }

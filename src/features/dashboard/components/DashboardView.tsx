@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   CalendarDays, Briefcase, DollarSign, HeartPulse,
-  BookOpen, Code2, FileText, Circle, Bot, Lightbulb,
+  BookOpen, Code2, FileText, Circle, Bot, Lightbulb, Target,
 } from 'lucide-react'
 import Card from '@/components/Card'
 import ScoreHero from './ScoreHero'
@@ -92,7 +92,7 @@ function computeInsights(
 const LEVEL_NAMES = ['', 'Novice', 'Explorer', 'Achiever', 'Champion', 'Master', 'Legend', 'Grandmaster', 'Immortal']
 
 export default function DashboardView({ data }: { data: DashboardData }) {
-  const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth, scoreHistory, gamification } = data
+  const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth, scoreHistory, gamification, aiBudget, topActions } = data
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -126,6 +126,27 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <h2 className="text-2xl font-bold text-white">{greeting}, Vinay</h2>
         <p className="text-sm text-slate-500 mt-1">Here&apos;s your Life Intelligence Dashboard</p>
       </div>
+
+      {/* Today's Focus — ranked, highest-impact actions. No AI: deterministic rules over existing data. */}
+      <Card title="Today's Focus" action={<Target size={13} className="text-accent" />}>
+        {topActions.length > 0 ? (
+          <ul className="space-y-1">
+            {topActions.map((action, i) => (
+              <li key={i}>
+                <Link href={action.href} className="flex items-center gap-3 py-2 px-3 -mx-3 rounded-lg hover:bg-surface-2 transition-colors group">
+                  <span className="text-lg shrink-0">{action.emoji}</span>
+                  <p className="text-sm text-slate-300 flex-1">{action.text}</p>
+                  <span className="text-xs text-slate-600 group-hover:text-accent transition-colors">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-slate-400">Nothing urgent — you&apos;re on top of everything 🎉</p>
+          </div>
+        )}
+      </Card>
 
       {/* Hero: Life Score + Module Scores */}
       <div className="bg-gradient-to-br from-surface-1 via-surface-2 to-surface-1 border border-surface-3 rounded-2xl p-6">
@@ -283,8 +304,15 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
       {/* Bot Activity */}
       <Card title="Bot Activity" action={
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <Bot size={12} /><span>Telegram</span>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          {aiBudget && (
+            <span title={`${aiBudget.callsMonth} AI calls this month · ${aiBudget.cacheHitRateMonth}% served from cache`}>
+              💰 ${aiBudget.costTodayUsd.toFixed(2)} today · ${aiBudget.costMonthUsd.toFixed(2)} this month
+            </span>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Bot size={12} /><span>Telegram</span>
+          </div>
         </div>
       }>
         {!botActivity || botActivity.length === 0 ? (
