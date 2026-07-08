@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 
 const CHAT_ID = process.env.TELEGRAM_ALLOWED_CHAT_ID!
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_PLANNER!
@@ -77,7 +77,7 @@ Write a short morning briefing (max 120 words):
 
 Keep it direct, personal, and energetic. No bullet points — flowing text.`
 
-  const message = await aiText(prompt, 'You are Vinay\'s personal AI coach. Write like a coach texting a friend. Warm but direct.')
+  const message = await askAI('daily_briefing', prompt, 'You are Vinay\'s personal AI coach. Write like a coach texting a friend. Warm but direct.', { userId: user.id })
 
   const trendEmoji = delta === null ? '' : delta > 0 ? '📈' : delta < 0 ? '📉' : '➡️'
   const scoreLine = `*Life Score: ${lifeScore}/100* ${trendEmoji}${delta !== null ? ` (${delta >= 0 ? '+' : ''}${delta})` : ''}`

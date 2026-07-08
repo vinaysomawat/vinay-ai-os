@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 
 const CHAT_ID   = process.env.TELEGRAM_ALLOWED_CHAT_ID!
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_PLANNER!
@@ -69,7 +69,7 @@ Write a motivating 3-sentence weekly digest:
 
 Keep it personal, direct, under 80 words.`
 
-  const message = await aiText(prompt, 'You are Vinay\'s AI life coach giving a weekly review. Be honest, warm, and motivating.')
+  const message = await askAI('weekly_digest', prompt, 'You are Vinay\'s AI life coach giving a weekly review. Be honest, warm, and motivating.', { userId: user.id })
 
   const scoreBar = (score: number) => '█'.repeat(Math.round(score / 10)) + '░'.repeat(10 - Math.round(score / 10))
 

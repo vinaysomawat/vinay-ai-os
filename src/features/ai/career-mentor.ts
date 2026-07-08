@@ -1,6 +1,6 @@
 'use server'
 
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 import type { CareerProfile, Skill, Application } from '@/features/career/types'
 
 interface CareerContext {
@@ -32,7 +32,7 @@ Recent applications: ${ctx.applications.slice(0, 5).map(a => `${a.company} (${a.
 
 Question: ${question}`
 
-  return aiText(context, `You are Vinay's personal career mentor — sharp, honest, and specific.
+  return askAI('career_mentor', context, `You are Vinay's personal career mentor — sharp, honest, and specific.
 He is a frontend/testing engineer targeting senior+ roles.
 Give concrete, actionable advice referencing his actual skills and experience.
 If asked about readiness for a role, give a clear verdict with specific gaps to close.
@@ -51,26 +51,11 @@ Return ONLY a JSON array in this exact format:
 
 Make the questions realistic and specific. Answers should be concise model answers (2-4 sentences).`
 
-  const raw = await aiText(prompt, 'You are a senior engineering interviewer. Return only valid JSON, no explanation.')
+  const raw = await askAI('interview_questions', prompt, 'You are a senior engineering interviewer. Return only valid JSON, no explanation.')
   try {
     const match = raw.match(/\[[\s\S]*\]/)
     return match ? JSON.parse(match[0]) : []
   } catch {
     return []
   }
-}
-
-export async function getCareerAdvice(applications: Application[]): Promise<string> {
-  const counts = applications.reduce<Record<string, number>>((acc, a) => {
-    acc[a.status] = (acc[a.status] ?? 0) + 1
-    return acc
-  }, {})
-
-  const prompt = `Job application pipeline analysis:
-${Object.entries(counts).map(([s, n]) => `${s}: ${n}`).join(', ')}
-Recent: ${applications.slice(0, 5).map(a => `${a.company} (${a.role}) → ${a.status}`).join(', ')}
-
-Give 3 specific, actionable next steps to improve the job search. Be direct and practical.`
-
-  return aiText(prompt, 'You are a career coach. Give sharp, specific advice. Under 150 words.')
 }

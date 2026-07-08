@@ -99,7 +99,7 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
     }
 
     case 'ask': {
-      const { aiText } = await import('@/lib/anthropic')
+      const { askAI } = await import('@/lib/ai-gateway')
       const [profileRes, loansRes, investmentsRes, goalsRes, expensesRes] = await Promise.all([
         db.from('finance_profile').select('*').eq('user_id', userId).single(),
         db.from('loans').select('*').eq('user_id', userId),
@@ -112,7 +112,7 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
       const portfolio = (investmentsRes.data ?? []).reduce((s, i) => s + Number(i.current_value), 0)
       const avgSpend = Math.round((expensesRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0) / 3)
       const context = `Vinay's finances: salary ₹${salary}/mo, EMIs ₹${emis}/mo, avg spend ₹${avgSpend}/mo, portfolio ₹${portfolio}, loans: ${(loansRes.data ?? []).map(l => `${l.name} ₹${l.emi}/mo ${l.remaining_months}mo left`).join('; ')}, goals: ${(goalsRes.data ?? []).map(g => `${g.name} target ₹${g.target_amount} saved ₹${g.current_amount}`).join('; ')}`
-      const answer = await aiText(`${context}\n\nQuestion: ${action.question}`, "You are Vinay's personal finance advisor. Give sharp, numbers-driven advice. Be direct. Under 150 words.")
+      const answer = await askAI('finance_advisor', `${context}\n\nQuestion: ${action.question}`, "You are Vinay's personal finance advisor. Give sharp, numbers-driven advice. Be direct. Under 150 words.", { userId })
       return `🤖 *Finance Advisor:*\n\n${answer}`
     }
 

@@ -1,6 +1,6 @@
 'use server'
 
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 import type { FinanceProfile, Loan, Investment, FinancialGoal } from '@/features/finance/types'
 
 interface FinancialContext {
@@ -32,7 +32,7 @@ ${ctx.investments.map(i => `  • ${i.name} (${i.type}): invested ₹${i.investe
 
 Question: ${question}`
 
-  return aiText(context, `You are Vinay's personal finance advisor. Give sharp, specific, numbers-driven advice tailored to his exact situation.
+  return askAI('finance_advisor', context, `You are Vinay's personal finance advisor. Give sharp, specific, numbers-driven advice tailored to his exact situation.
 Reference his actual salary, EMIs, and investments. Be direct — don't hedge everything.
 If recommending an investment or loan decision, give a clear verdict with reasoning. Keep it under 200 words.`)
 }

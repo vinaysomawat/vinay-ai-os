@@ -1,6 +1,6 @@
 'use server'
 
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 import type { Resource, StudyLog } from '@/features/learning/types'
 
 export async function getDailyStudyPlan(resources: Resource[], recentLogs: StudyLog[]): Promise<string> {
@@ -34,7 +34,7 @@ Create a focused study plan for today. Include:
 
 Be specific — reference actual resource names and chapters/topics. Keep it under 150 words.`
 
-  return aiText(prompt, "You are Vinay's personal study coach. Create sharp, specific daily plans. Reference his actual resources by name.")
+  return askAI('study_plan', prompt, "You are Vinay's personal study coach. Create sharp, specific daily plans. Reference his actual resources by name.")
 }
 
 export async function generateResourceQuiz(title: string, category: string, type: string, notes: string | null): Promise<{ question: string; answer: string }[]> {
@@ -48,7 +48,7 @@ Return ONLY a JSON array:
 
 Questions should test real understanding, not just trivia. Mix conceptual, applied, and comparison questions. Answers in 2-3 sentences.`
 
-  const raw = await aiText(prompt, 'You are a knowledgeable tutor. Return only valid JSON, no extra text.')
+  const raw = await askAI('resource_quiz', prompt, 'You are a knowledgeable tutor. Return only valid JSON, no extra text.')
   try {
     const match = raw.match(/\[[\s\S]*\]/)
     return match ? JSON.parse(match[0]) : []

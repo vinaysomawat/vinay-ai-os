@@ -2,14 +2,15 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 
 async function generateSummary(title: string, content: string): Promise<string> {
   if (content.length < 300) return ''
-  return aiText(
+  return askAI(
+    'doc_summary',
     `Summarise this document in 2-3 sentences. Title: "${title}"\n\n${content.slice(0, 6000)}`,
     'You are a concise document summariser. Return only the summary, no preamble.'
-  ).catch(() => '')
+  )
 }
 
 export async function getDocuments() {
@@ -35,7 +36,11 @@ export async function addDocument(title: string, content: string, tags: string[]
 
 export async function updateDocument(id: string, title: string, content: string, tags: string[]) {
   const supabase = await createClient()
-  const summary = await generateSummary(title, content)
+
+  const { data: existing } = await supabase.from('documents').select('title, content, summary').eq('id', id).single()
+  const contentChanged = !existing || existing.title !== title || existing.content !== content
+  const summary = contentChanged ? await generateSummary(title, content) : existing.summary
+
   const { error } = await supabase
     .from('documents')
     .update({ title, content, tags, summary, updated_at: new Date().toISOString() })

@@ -5,7 +5,7 @@ import { Plus, CheckCircle2, Circle, Trash2, Sparkles } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addTask, toggleTask, deleteTask } from '../actions'
-import { smartSortTasks, getFocusTask } from '@/features/ai/smart-sort'
+import { smartSortAndFocus } from '@/features/ai/smart-sort'
 import { RefreshCw } from 'lucide-react'
 import type { Task, Priority, Recurrence } from '../types'
 
@@ -99,13 +99,10 @@ export default function PlannerView({ initialTasks }: Props) {
     setAiSorting(true)
     setFocusHint(null)
     try {
-      const [sortedIds, focus] = await Promise.all([
-        smartSortTasks(pending),
-        getFocusTask(pending),
-      ])
+      const { order, focus } = await smartSortAndFocus(pending)
       const idToTask = new Map(pending.map(t => [t.id, t]))
-      const reordered = sortedIds.map(id => idToTask.get(id)).filter(Boolean) as Task[]
-      const missing = pending.filter(t => !sortedIds.includes(t.id))
+      const reordered = order.map(id => idToTask.get(id)).filter(Boolean) as Task[]
+      const missing = pending.filter(t => !order.includes(t.id))
       updateOptimisticTasks({ type: 'reorder', payload: [...reordered, ...missing, ...done] })
       setFocusHint(focus)
     } finally {

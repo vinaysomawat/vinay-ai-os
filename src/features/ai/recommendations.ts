@@ -1,6 +1,6 @@
 'use server'
 
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 
 export interface Recommendation {
   emoji: string
@@ -8,7 +8,7 @@ export interface Recommendation {
   impact: string
 }
 
-export async function getModuleRecommendations(moduleLabel: string, context: string): Promise<Recommendation[]> {
+export async function getModuleRecommendations(moduleLabel: string, context: string, bypassCache = false): Promise<Recommendation[]> {
   const prompt = `You are Vinay's AI life coach. Based on his current ${moduleLabel} data below, suggest exactly 3 specific, actionable recommendations he can act on today to improve this area.
 
 ${context}
@@ -16,7 +16,7 @@ ${context}
 Return ONLY a JSON array (no markdown, no extra text) of exactly 3 items in this shape:
 [{"emoji": "single emoji", "action": "specific action referencing his real data above", "impact": "short expected effect"}]`
 
-  const raw = await aiText(prompt, "You are Vinay's AI life coach. Be specific, data-driven, and motivating — reference his actual numbers. Return only a valid JSON array, no markdown fences.")
+  const raw = await askAI('module_recommendations', prompt, "You are Vinay's AI life coach. Be specific, data-driven, and motivating — reference his actual numbers. Return only a valid JSON array, no markdown fences.", { bypassCache })
 
   try {
     const match = raw.match(/\[[\s\S]*\]/)

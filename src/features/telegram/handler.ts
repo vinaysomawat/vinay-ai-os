@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { sendMessage } from '@/lib/telegram/send'
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 import { transcribeVoice } from '@/lib/telegram/transcribe'
 import type { TelegramUpdate } from '@/lib/telegram/types'
 
@@ -29,6 +29,19 @@ export function isValidModule(m: string): m is ModuleName {
   return m in MODULES
 }
 
+// Safety ceiling against a runaway loop or accidental spam — not a tight budget.
+// Generous normal daily use is well under this; override via env if needed.
+const DAILY_AI_CALL_CAP = Number(process.env.TELEGRAM_DAILY_AI_CAP ?? 300)
+
+async function todaysCallCount(db: ReturnType<typeof createServiceClient>): Promise<number> {
+  const todayStart = `${new Date().toISOString().split('T')[0]}T00:00:00.000Z`
+  const { count } = await db
+    .from('telegram_logs')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', todayStart)
+  return count ?? 0
+}
+
 export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdate): Promise<void> {
   const msg = update.message
   if (!msg?.text && !msg?.voice) return
@@ -47,6 +60,7 @@ export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdat
   }
 
   const mod = MODULES[moduleName]
+  const db = createServiceClient()
 
   // Transcribe voice to text if needed
   let text: string
@@ -66,13 +80,30 @@ export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdat
     text = msg.text!.trim()
   }
 
+  if ((await todaysCallCount(db)) >= DAILY_AI_CALL_CAP) {
+    const reply = `⏸️ Daily AI quota reached (${DAILY_AI_CALL_CAP} calls) — resets at midnight UTC. This message wasn't processed to avoid runaway spend.`
+    await sendMessage(token, chatId, reply)
+    try {
+      await db.from('telegram_logs').insert({
+        module: moduleName,
+        telegram_chat_id: chatId,
+        message: text,
+        action_taken: { action: 'quota_exceeded' },
+        response: reply,
+      })
+    } catch {
+      // Non-fatal: log failure shouldn't affect user
+    }
+    return
+  }
+
   let action: Record<string, unknown> = { action: 'help' }
   let reply = ''
 
   try {
     const todayStr = new Date().toISOString().split('T')[0]
     const systemPrompt = `${mod.SYSTEM_PROMPT}\n\nToday's actual date is ${todayStr} (YYYY-MM-DD). Always use this for "today", "now", or any relative date/default date — never guess or use a date from your training data.`
-    const raw = await aiText(text, systemPrompt)
+    const raw = await askAI('telegram_intent', text, systemPrompt, { userId })
     const match = raw.match(/\{[\s\S]*\}/)
     if (match) action = JSON.parse(match[0])
   } catch {
@@ -80,7 +111,6 @@ export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdat
   }
 
   try {
-    const db = createServiceClient()
     reply = await mod.execute(action, db, userId)
   } catch (err) {
     reply = `❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -90,7 +120,6 @@ export async function handleUpdate(moduleName: ModuleName, update: TelegramUpdat
 
   // Log every instruction
   try {
-    const db = createServiceClient()
     await db.from('telegram_logs').insert({
       module: moduleName,
       telegram_chat_id: chatId,

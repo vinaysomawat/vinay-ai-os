@@ -1,6 +1,6 @@
 'use server'
 
-import { aiText } from '@/lib/anthropic'
+import { askAI } from '@/lib/ai-gateway'
 import type { HealthMetric, HealthProfile, HabitWithLogs } from '@/features/health/types'
 import type { WeightLossPlan, HealthScoreBreakdown } from '@/features/health/calculations'
 
@@ -38,7 +38,7 @@ Write a weekly health report with:
 
 Be encouraging but direct. Reference actual numbers. Keep it under 200 words.`
 
-  return aiText(prompt, "You are Vinay's personal health coach. Give sharp, data-driven feedback. No generic advice — reference his specific numbers.")
+  return askAI('health_report', prompt, "You are Vinay's personal health coach. Give sharp, data-driven feedback. No generic advice — reference his specific numbers.")
 }
 
 export async function getDailyHealthPlan(
@@ -69,5 +69,5 @@ Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score}
 
 Write today's action plan as a short checklist (6-8 lines, each starting with an emoji), covering what's left to eat, water, steps/workout, and sleep timing. End with one sentence explaining why these matter for hitting his weight goal on time. Be specific to the numbers above — no generic advice. Plain text only — no markdown (no **, no #, no bullet dashes). Keep it under 150 words.`
 
-  return aiText(prompt, "You are Vinay's personal fitness and nutrition coach. Be specific, data-driven, and direct. Reference his actual numbers, not generic tips.")
+  return askAI('health_daily_plan', prompt, "You are Vinay's personal fitness and nutrition coach. Be specific, data-driven, and direct. Reference his actual numbers, not generic tips.")
 }

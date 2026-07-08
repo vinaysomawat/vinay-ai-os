@@ -15,12 +15,12 @@ export default function ModuleRecommendations({ moduleLabel, context }: Props) {
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState<Recommendation[] | null>(null)
 
-  const generate = async () => {
+  const generate = async (bypassCache: boolean) => {
     if (loading) return
     setOpen(true)
     setLoading(true)
     try {
-      const result = await getModuleRecommendations(moduleLabel, context)
+      const result = await getModuleRecommendations(moduleLabel, context, bypassCache)
       setItems(result)
     } finally {
       setLoading(false)
@@ -28,7 +28,7 @@ export default function ModuleRecommendations({ moduleLabel, context }: Props) {
   }
 
   const handleToggle = () => {
-    if (!items) { generate(); return }
+    if (!items) { generate(false); return }
     setOpen(v => !v)
   }
 
@@ -43,7 +43,7 @@ export default function ModuleRecommendations({ moduleLabel, context }: Props) {
           {loading && <span className="text-xs text-slate-500">Thinking...</span>}
           {items && !loading && (
             <button
-              onClick={e => { e.stopPropagation(); generate() }}
+              onClick={e => { e.stopPropagation(); generate(true) }}
               className="text-slate-500 hover:text-accent transition-colors"
               title="Regenerate"
             >
