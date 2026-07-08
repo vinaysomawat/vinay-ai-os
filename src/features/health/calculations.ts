@@ -1,4 +1,4 @@
-import type { ActivityLevel, Gender, HealthMetric, HabitWithLogs } from './types'
+import type { ActivityLevel, Gender, HealthMetric, HabitWithLogs, HealthProfile } from './types'
 
 const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -172,4 +172,43 @@ export function calculateHealthScore(
     activity: { score: activityScore, reason: activityReason },
     consistency: { score: consistencyScore, reason: consistencyReason },
   }
+}
+
+export interface HealthPlanResult {
+  weightLossPlan: WeightLossPlan
+  healthScore: HealthScoreBreakdown
+}
+
+// Shared by the web app (HealthView) and the Telegram health bot — the single
+// place "can we compute today's plan" and "what's today's score" are decided,
+// so both surfaces stay in sync.
+export function computeHealthPlan(
+  profile: HealthProfile | null,
+  metrics: HealthMetric[],
+  habits: HabitWithLogs[],
+  today: string
+): HealthPlanResult | null {
+  const todayMetric = metrics.find(m => m.date === today) ?? null
+  const latestWeight = todayMetric?.weight_kg
+    ?? [...metrics].filter(m => m.weight_kg !== null).sort((a, b) => b.date.localeCompare(a.date))[0]?.weight_kg
+    ?? null
+
+  const canCalculate = !!profile && profile.age && profile.gender && profile.height_cm && profile.target_weight_kg && profile.activity_level && latestWeight
+  if (!canCalculate) return null
+
+  const weightLossPlan = calculateWeightLossPlan(
+    latestWeight!,
+    profile!.target_weight_kg!,
+    calculateTDEE(calculateBMR(latestWeight!, profile!.height_cm!, profile!.age!, profile!.gender!), profile!.activity_level!),
+    profile!.goal_deadline
+  )
+
+  const healthScore = calculateHealthScore(
+    todayMetric,
+    { calories: weightLossPlan.dailyCalorieTarget, protein: weightLossPlan.proteinTargetG, steps: 10000 },
+    habits,
+    today
+  )
+
+  return { weightLossPlan, healthScore }
 }

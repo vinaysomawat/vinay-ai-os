@@ -4,24 +4,25 @@ import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, X, Flame, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
-import { addHabit, logHabit, unlogHabit, deleteHabit, upsertTodayMetric } from '../actions'
+import { addHabit, logHabit, unlogHabit, deleteHabit, upsertTodayMetric, logWorkout, deleteWorkout } from '../actions'
 import { getHealthReport } from '@/features/ai/health-report'
-import { calculateBMR, calculateTDEE, calculateWeightLossPlan, calculateHealthScore } from '../calculations'
+import { computeHealthPlan } from '../calculations'
 import HealthProfileForm from './HealthProfileForm'
 import HealthScoreHero from './HealthScoreHero'
 import TodaysPlanCard from './TodaysPlanCard'
 import MetricChart from './MetricChart'
-import type { HabitWithLogs, HealthMetric, MetricField, HealthProfile } from '../types'
+import type { HabitWithLogs, HealthMetric, MetricField, HealthProfile, Workout } from '../types'
 
 const ICONS = ['🏋️', '💧', '😴', '🧘', '📚', '🏃', '🥗', '💊', '🚴', '✍️']
 
 const METRICS: { field: MetricField; label: string; emoji: string; unit: string; decimals?: number }[] = [
-  { field: 'weight_kg',    label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
-  { field: 'calories',     label: 'Calories', emoji: '🔥',  unit: 'kcal' },
-  { field: 'protein_g',    label: 'Protein',  emoji: '🥩',  unit: 'g' },
-  { field: 'sleep_hours',  label: 'Sleep',    emoji: '😴',  unit: 'hrs',  decimals: 1 },
-  { field: 'steps',        label: 'Steps',    emoji: '👟',  unit: 'steps' },
-  { field: 'water_ml',     label: 'Water',    emoji: '💧',  unit: 'ml' },
+  { field: 'weight_kg',      label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
+  { field: 'calories',       label: 'Calories', emoji: '🔥',  unit: 'kcal' },
+  { field: 'protein_g',      label: 'Protein',  emoji: '🥩',  unit: 'g' },
+  { field: 'sleep_hours',    label: 'Sleep',    emoji: '😴',  unit: 'hrs',  decimals: 1 },
+  { field: 'steps',          label: 'Steps',    emoji: '👟',  unit: 'steps' },
+  { field: 'water_ml',       label: 'Water',    emoji: '💧',  unit: 'ml' },
+  { field: 'recovery_score', label: 'Recovery', emoji: '🔋',  unit: '/5' },
 ]
 
 function getLast7Days() {
@@ -93,12 +94,26 @@ interface Props {
   initialHabits: HabitWithLogs[]
   initialMetrics: HealthMetric[]
   initialProfile: HealthProfile | null
+  initialWorkouts: Workout[]
 }
 
-export default function HealthView({ initialHabits, initialMetrics, initialProfile }: Props) {
+const WORKOUT_TYPES = ['Strength', 'Cardio', 'Run', 'Yoga', 'Sports', 'Other']
+
+export default function HealthView({ initialHabits, initialMetrics, initialProfile, initialWorkouts }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('🏋️')
+  const [workoutType, setWorkoutType] = useState('Strength')
+  const [workoutDuration, setWorkoutDuration] = useState('')
+
+  const [workouts, updateWorkouts] = useOptimistic(
+    initialWorkouts,
+    (state: Workout[], action: { type: 'add' | 'delete'; payload: Workout | { id: string } }) => {
+      if (action.type === 'add') return [action.payload as Workout, ...state]
+      if (action.type === 'delete') return state.filter(w => w.id !== (action.payload as { id: string }).id)
+      return state
+    }
+  )
   const [isPending, startTransition] = useTransition()
   const [saving, setSaving] = useState<MetricField | null>(null)
   const [metrics, setMetrics] = useState<HealthMetric[]>(initialMetrics)
@@ -119,26 +134,12 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
   }
 
-  const latestWeight = todayMetric?.weight_kg
-    ?? [...metrics].filter(m => m.weight_kg !== null).sort((a, b) => b.date.localeCompare(a.date))[0]?.weight_kg
-    ?? null
-
-  const canCalculate = !!profile && profile.age && profile.gender && profile.height_cm && profile.target_weight_kg && profile.activity_level && latestWeight
-  const weightLossPlan = canCalculate
-    ? calculateWeightLossPlan(
-        latestWeight!,
-        profile!.target_weight_kg!,
-        calculateTDEE(calculateBMR(latestWeight!, profile!.height_cm!, profile!.age!, profile!.gender!), profile!.activity_level!),
-        profile!.goal_deadline
-      )
-    : null
-
   const handleMetricSave = (field: MetricField, value: number) => {
     setSaving(field)
     setMetrics(prev => {
       const existing = prev.find(m => m.date === today)
       if (existing) return prev.map(m => m.date === today ? { ...m, [field]: value } : m)
-      return [{ id: `temp`, user_id: '', date: today, weight_kg: null, calories: null, protein_g: null, sleep_hours: null, steps: null, water_ml: null, notes: null, created_at: new Date().toISOString(), [field]: value }, ...prev]
+      return [{ id: `temp`, user_id: '', date: today, weight_kg: null, calories: null, protein_g: null, sleep_hours: null, steps: null, water_ml: null, recovery_score: null, notes: null, created_at: new Date().toISOString(), [field]: value }, ...prev]
     })
     upsertTodayMetric(field, value).finally(() => setSaving(null))
   }
@@ -185,17 +186,26 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
     startTransition(async () => { updateHabits({ type: 'delete', payload: { id } }); await deleteHabit(id) })
   }
 
+  const handleLogWorkout = () => {
+    const duration = workoutDuration ? parseInt(workoutDuration, 10) : null
+    const type = workoutType
+    const optimistic: Workout = {
+      id: `temp-${Date.now()}`, user_id: '', date: today, type, duration_minutes: duration, notes: null, created_at: new Date().toISOString(),
+    }
+    setWorkoutDuration('')
+    startTransition(async () => { updateWorkouts({ type: 'add', payload: optimistic }); await logWorkout(type, duration, null) })
+  }
+
+  const handleDeleteWorkout = (id: string) => {
+    startTransition(async () => { updateWorkouts({ type: 'delete', payload: { id } }); await deleteWorkout(id) })
+  }
+
   const completedToday = habits.filter(h => h.logs.some(l => l.date === today)).length
   const bestStreak = habits.length > 0 ? Math.max(...habits.map(h => getStreak(h.logs))) : 0
 
-  const healthScore = weightLossPlan
-    ? calculateHealthScore(
-        todayMetric,
-        { calories: weightLossPlan.dailyCalorieTarget, protein: weightLossPlan.proteinTargetG, steps: 10000 },
-        habits,
-        today
-      )
-    : null
+  const healthPlan = computeHealthPlan(profile, metrics, habits, today)
+  const weightLossPlan = healthPlan?.weightLossPlan ?? null
+  const healthScore = healthPlan?.healthScore ?? null
 
   const leftText = (field: MetricField): string | null => {
     if (!weightLossPlan) return null
@@ -303,6 +313,49 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
         </div>
       </div>
 
+      {/* Workouts — structured, separate from generic habit checkboxes */}
+      <Card title="Workouts" action={<span className="text-xs text-slate-500">{workouts.length} today</span>}>
+        <div className="flex gap-2 mb-4">
+          <select
+            value={workoutType}
+            onChange={e => setWorkoutType(e.target.value)}
+            className="bg-surface-2 border border-surface-3 rounded-lg px-2 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors"
+          >
+            {WORKOUT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input
+            type="number"
+            min={1}
+            value={workoutDuration}
+            onChange={e => setWorkoutDuration(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogWorkout()}
+            placeholder="Minutes (optional)"
+            className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
+          />
+          <button
+            onClick={handleLogWorkout}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors"
+          >
+            <Plus size={14} />
+            Log
+          </button>
+        </div>
+        {workouts.length === 0 ? (
+          <p className="text-sm text-slate-600 text-center py-4">No workouts logged today</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {workouts.map(w => (
+              <li key={w.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                <span className="flex-1 text-sm text-slate-200">{w.type}{w.duration_minutes ? ` — ${w.duration_minutes} min` : ''}</span>
+                <button onClick={() => handleDeleteWorkout(w.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                  <Trash2 size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {/* Weight trend */}
       <Card title="Weight Trend">
         <MetricChart metrics={metrics} field="weight_kg" label="Weight" unit="kg" decimals={1} lowerIsBetter />
@@ -357,7 +410,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
         )}
       </div>
 
-      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml. Habits today: ${completedToday}/${habits.length} done. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
+      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Habits today: ${completedToday}/${habits.length} done. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
 
       {/* Habit tracker */}
       <Card title="Weekly Habits" action={

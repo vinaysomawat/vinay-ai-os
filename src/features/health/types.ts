@@ -18,7 +18,7 @@ export interface HabitWithLogs extends Habit {
   logs: HabitLog[]
 }
 
-export type MetricField = 'weight_kg' | 'calories' | 'protein_g' | 'sleep_hours' | 'steps' | 'water_ml'
+export type MetricField = 'weight_kg' | 'calories' | 'protein_g' | 'sleep_hours' | 'steps' | 'water_ml' | 'recovery_score'
 
 export interface HealthMetric {
   id: string
@@ -30,6 +30,17 @@ export interface HealthMetric {
   sleep_hours: number | null
   steps: number | null
   water_ml: number | null
+  recovery_score: number | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Workout {
+  id: string
+  user_id: string
+  date: string
+  type: string
+  duration_minutes: number | null
   notes: string | null
   created_at: string
 }

@@ -84,6 +84,33 @@ export async function deleteHabit(id: string) {
   revalidatePath('/health')
 }
 
+export async function getTodaysWorkouts() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const today = new Date().toISOString().split('T')[0]
+  const { data } = await supabase.from('workouts').select('*').eq('user_id', user.id).eq('date', today).order('created_at', { ascending: false })
+  return data ?? []
+}
+
+export async function logWorkout(type: string, durationMinutes: number | null, notes: string | null) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase.from('workouts').insert({ user_id: user.id, type, duration_minutes: durationMinutes, notes })
+  if (error) throw new Error(error.message)
+  revalidatePath('/health')
+}
+
+export async function deleteWorkout(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('workouts').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/health')
+}
+
 export async function getHealthProfile() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
