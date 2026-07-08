@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import type { ProjectStatus } from './types'
+import type { ProjectStatus, WorkType } from './types'
 
 export async function getProjects() {
   const supabase = await createClient()
@@ -27,6 +27,7 @@ export async function addProject(formData: FormData) {
     name: formData.get('name') as string,
     description: formData.get('description') as string || null,
     status: formData.get('status') as ProjectStatus || 'idea',
+    work_type: formData.get('work_type') as WorkType || 'personal',
     stack,
     github_url: formData.get('github_url') as string || null,
     live_url: formData.get('live_url') as string || null,
@@ -38,6 +39,13 @@ export async function addProject(formData: FormData) {
 export async function updateProjectStatus(id: string, status: ProjectStatus) {
   const supabase = await createClient()
   const { error } = await supabase.from('projects').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/coding')
+}
+
+export async function updateProjectWorkType(id: string, workType: WorkType) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('projects').update({ work_type: workType }).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/coding')
 }

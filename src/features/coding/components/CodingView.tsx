@@ -8,8 +8,8 @@ import DailyCodingCard from './DailyCodingCard'
 import CodingCalendar from './CodingCalendar'
 import CodingSettingsPopover from './CodingSettingsPopover'
 import QuestionHistory from './QuestionHistory'
-import { addProject, updateProjectStatus, deleteProject } from '../actions'
-import type { Project, ProjectStatus } from '../types'
+import { addProject, updateProjectStatus, updateProjectWorkType, deleteProject } from '../actions'
+import type { Project, ProjectStatus, WorkType } from '../types'
 import type { DailyQuestion, CodingStats, CalendarDay, CodingSettings } from '../daily-core'
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: string }> = {
@@ -20,6 +20,13 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: s
 }
 
 const STATUSES = Object.keys(STATUS_CONFIG) as ProjectStatus[]
+
+const WORK_TYPE_CONFIG: Record<WorkType, { label: string; emoji: string }> = {
+  personal: { label: 'Personal', emoji: '🌱' },
+  office:   { label: 'Office',   emoji: '💼' },
+  oss:      { label: 'OSS',      emoji: '🌐' },
+}
+const WORK_TYPES = Object.keys(WORK_TYPE_CONFIG) as WorkType[]
 
 interface Props {
   initialProjects: Project[]
@@ -40,6 +47,7 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
     (state: Project[], action: { type: string; payload: Partial<Project> & { id?: string } }) => {
       if (action.type === 'add') return [action.payload as Project, ...state]
       if (action.type === 'status') return state.map(p => p.id === action.payload.id ? { ...p, status: action.payload.status! } : p)
+      if (action.type === 'work_type') return state.map(p => p.id === action.payload.id ? { ...p, work_type: action.payload.work_type! } : p)
       if (action.type === 'delete') return state.filter(p => p.id !== action.payload.id)
       return state
     }
@@ -55,6 +63,7 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
       name: formData.get('name') as string,
       description: formData.get('description') as string || null,
       status: formData.get('status') as ProjectStatus || 'idea',
+      work_type: formData.get('work_type') as WorkType || 'personal',
       stack: stackRaw ? stackRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
       github_url: formData.get('github_url') as string || null,
       live_url: formData.get('live_url') as string || null,
@@ -71,6 +80,13 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
     startTransition(async () => {
       updateProjects({ type: 'status', payload: { id, status } })
       await updateProjectStatus(id, status)
+    })
+  }
+
+  const handleWorkType = (id: string, work_type: WorkType) => {
+    startTransition(async () => {
+      updateProjects({ type: 'work_type', payload: { id, work_type } })
+      await updateProjectWorkType(id, work_type)
     })
   }
 
@@ -122,6 +138,7 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-slate-200">{p.name}</span>
+                      <span className="text-xs">{WORK_TYPE_CONFIG[p.work_type].emoji}</span>
                       {p.github_url && <a href={p.github_url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-accent transition-colors"><Github size={13} /></a>}
                       {p.live_url && <a href={p.live_url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-accent transition-colors"><ExternalLink size={11} /></a>}
                     </div>
@@ -130,6 +147,10 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
                       <select value={p.status} onChange={e => handleStatus(p.id, e.target.value as ProjectStatus)} disabled={isPending}
                         className={`text-xs px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer font-medium ${cfg.color} ${cfg.bg}`}>
                         {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+                      </select>
+                      <select value={p.work_type} onChange={e => handleWorkType(p.id, e.target.value as WorkType)} disabled={isPending}
+                        className="text-xs px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer font-medium text-slate-400 bg-surface-3">
+                        {WORK_TYPES.map(w => <option key={w} value={w}>{WORK_TYPE_CONFIG[w].emoji} {WORK_TYPE_CONFIG[w].label}</option>)}
                       </select>
                       {p.stack.map(t => (
                         <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-slate-400 font-mono">{t}</span>
@@ -146,7 +167,7 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
         </ul>
       </Card>
 
-      <ModuleRecommendations moduleLabel="Coding" context={`Projects tracked: ${projects.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Active projects: ${projects.filter(p => p.status === 'in-progress').map(p => `${p.name} (${p.stack.join(', ')})`).join('; ') || 'none'}.`} />
+      <ModuleRecommendations moduleLabel="Coding" context={`Projects tracked: ${projects.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). By type: ${WORK_TYPES.map(w => `${projects.filter(p => p.work_type === w).length} ${WORK_TYPE_CONFIG[w].label.toLowerCase()}`).join(', ')}. Active projects: ${projects.filter(p => p.status === 'in-progress').map(p => `${p.name} (${WORK_TYPE_CONFIG[p.work_type].label}, ${p.stack.join(', ')})`).join('; ') || 'none'}.`} />
 
       {showForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -172,9 +193,15 @@ export default function CodingView({ initialProjects, dailyAssignment, codingSta
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Stack</label>
-                  <input name="stack" placeholder="React, Node, Postgres" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Type</label>
+                  <select name="work_type" defaultValue="personal" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                    {WORK_TYPES.map(w => <option key={w} value={w}>{WORK_TYPE_CONFIG[w].emoji} {WORK_TYPE_CONFIG[w].label}</option>)}
+                  </select>
                 </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Stack</label>
+                <input name="stack" placeholder="React, Node, Postgres" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
