@@ -15,15 +15,13 @@ interface TopActionInput {
   monthSpend: number
   monthBudget: number
   todayMetric: Record<string, unknown> | null
-  habitsTotal: number
-  habitsDoneToday: number
 }
 
 // Deterministic ranking — no AI call. Per Product Principles (CLAUDE.md):
 // "reduce decisions, don't just surface data" — surface the 3 highest-impact
 // actions instead of a wall of stat cards.
 function computeTopActions(input: TopActionInput): TopAction[] {
-  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, habitsTotal, habitsDoneToday } = input
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric } = input
   const candidates: (TopAction & { score: number })[] = []
 
   const overdue = pendingTasks.filter(t => t.due_date && t.due_date < today)
@@ -64,10 +62,6 @@ function computeTopActions(input: TopActionInput): TopAction[] {
     candidates.push({ score: 50, emoji: '📊', href: '/health', text: 'No health metrics logged today' })
   }
 
-  if (habitsTotal > 0 && habitsDoneToday === 0) {
-    candidates.push({ score: 40, emoji: '💪', href: '/health', text: `0/${habitsTotal} habits done today` })
-  }
-
   return candidates.sort((a, b) => b.score - a.score).slice(0, 3).map(c => ({ emoji: c.emoji, text: c.text, href: c.href }))
 }
 
@@ -84,21 +78,20 @@ export async function getDashboardData() {
     todayHealth: null,
     scoreHistory: [] as { date: string; life: number; health: number; finance: number; career: number; learning: number; projects: number }[],
     gamification: { xp: 0, level: 1, xpProgress: 0, streak: 0, badges: [] as string[] },
-    stats: { pendingTaskCount: 0, activeApplications: 0, habitsDoneToday: 0, totalHabits: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, activeProjects: 0, completedProjects: 0, githubCommits: 0, documentCount: 0 },
+    stats: { pendingTaskCount: 0, activeApplications: 0, workoutsToday: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, activeProjects: 0, completedProjects: 0, githubCommits: 0, documentCount: 0 },
     aiBudget: { callsToday: 0, costTodayUsd: 0, callsMonth: 0, costMonthUsd: 0, cacheHitRateMonth: 0 },
     topActions: [] as TopAction[],
   }
 
   const [
-    tasksRes, appsRes, habitsRes, logsRes,
+    tasksRes, appsRes, workoutsRes,
     expensesRes, budgetsRes, resourcesRes, projectsRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
-    supabase.from('habits').select('id').eq('user_id', user.id),
-    supabase.from('habit_logs').select('habit_id').eq('user_id', user.id).eq('date', today), // fixed: was logged_date
+    supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', today),
     supabase.from('expenses').select('amount').eq('user_id', user.id).gte('date', monthStart),
     supabase.from('budgets').select('amount').eq('user_id', user.id).eq('month', today.slice(0, 7)),
     supabase.from('resources').select('status').eq('user_id', user.id),
@@ -114,8 +107,7 @@ export async function getDashboardData() {
 
   const pendingTasks = tasksRes.data ?? []
   const applications = appsRes.data ?? []
-  const habits = habitsRes.data ?? []
-  const todayLogs = logsRes.data ?? []
+  const workoutsToday = workoutsRes.data ?? []
   const expenses = expensesRes.data ?? []
   const budgets = budgetsRes.data ?? []
   const resources = resourcesRes.data ?? []
@@ -131,12 +123,12 @@ export async function getDashboardData() {
   const completedProjects = projects.filter(p => p.status === 'completed').length
 
   // --- Scores ---
-  // Health: habits done today + metrics logged today
-  const habitScore = habits.length > 0 ? (todayLogs.length / habits.length) * 60 : 0
+  // Health: workout logged today + metrics logged today
+  const workoutScore = workoutsToday.length > 0 ? 60 : 0
   const metricsLogged = todayMetric ? Object.entries(todayMetric)
     .filter(([k]) => ['weight_kg','calories','protein_g','sleep_hours','steps','water_ml'].includes(k))
     .filter(([, v]) => v !== null).length : 0
-  const healthScore = Math.round(habitScore + (metricsLogged / 6) * 40)
+  const healthScore = Math.round(workoutScore + (metricsLogged / 6) * 40)
 
   // Finance: under/over budget; no budget = neutral 50
   let financeScore = 50
@@ -263,7 +255,6 @@ export async function getDashboardData() {
 
   const topActions = computeTopActions({
     today, pendingTasks, applications, monthSpend, monthBudget, todayMetric,
-    habitsTotal: habits.length, habitsDoneToday: todayLogs.length,
   })
 
   // Upsert XP record
@@ -283,8 +274,7 @@ export async function getDashboardData() {
     stats: {
       pendingTaskCount: pendingTasks.length,
       activeApplications: activeApps,
-      habitsDoneToday: todayLogs.length,
-      totalHabits: habits.length,
+      workoutsToday: workoutsToday.length,
       monthSpend, monthBudget,
       learningInProgress, activeProjects, completedProjects,
       githubCommits,

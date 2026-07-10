@@ -1,4 +1,4 @@
-import type { ActivityLevel, Gender, HealthMetric, HabitWithLogs, HealthProfile } from './types'
+import type { ActivityLevel, Gender, HealthMetric, Workout, HealthProfile } from './types'
 
 const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -90,7 +90,6 @@ export interface HealthScoreBreakdown {
   nutrition: SubScore
   sleep: SubScore
   activity: SubScore
-  consistency: SubScore
 }
 
 function clamp(n: number, min = 0, max = 100) {
@@ -100,7 +99,7 @@ function clamp(n: number, min = 0, max = 100) {
 export function calculateHealthScore(
   todayMetric: HealthMetric | null,
   targets: { calories: number; protein: number; steps: number },
-  habits: HabitWithLogs[],
+  workouts: Workout[],
   today: string
 ): HealthScoreBreakdown {
   // Nutrition
@@ -137,7 +136,7 @@ export function calculateHealthScore(
   // Activity
   let activityScore: number
   let activityReason: string
-  const workoutDoneToday = habits.some(h => h.logs.some(l => l.date === today) && /gym|workout|run|walk/i.test(h.name))
+  const workoutDoneToday = workouts.some(w => w.date === today)
   if (todayMetric?.steps == null) {
     activityScore = workoutDoneToday ? 50 : 0
     activityReason = workoutDoneToday ? 'Workout logged, but steps not tracked today' : 'Steps and workout not logged today'
@@ -149,20 +148,8 @@ export function calculateHealthScore(
       : `Hit today's ${targets.steps} step target`
   }
 
-  // Consistency — habit completion today across all tracked habits
-  let consistencyScore: number
-  let consistencyReason: string
-  if (habits.length === 0) {
-    consistencyScore = 0
-    consistencyReason = 'No habits set up yet'
-  } else {
-    const doneToday = habits.filter(h => h.logs.some(l => l.date === today)).length
-    consistencyScore = Math.round((doneToday / habits.length) * 100)
-    consistencyReason = `${doneToday}/${habits.length} habits completed today`
-  }
-
   const overall = Math.round(
-    nutritionScore * 0.3 + activityScore * 0.25 + sleepScore * 0.25 + consistencyScore * 0.2
+    nutritionScore * 0.4 + activityScore * 0.3 + sleepScore * 0.3
   )
 
   return {
@@ -170,7 +157,6 @@ export function calculateHealthScore(
     nutrition: { score: nutritionScore, reason: nutritionReason },
     sleep: { score: sleepScore, reason: sleepReason },
     activity: { score: activityScore, reason: activityReason },
-    consistency: { score: consistencyScore, reason: consistencyReason },
   }
 }
 
@@ -185,7 +171,7 @@ export interface HealthPlanResult {
 export function computeHealthPlan(
   profile: HealthProfile | null,
   metrics: HealthMetric[],
-  habits: HabitWithLogs[],
+  workouts: Workout[],
   today: string
 ): HealthPlanResult | null {
   const todayMetric = metrics.find(m => m.date === today) ?? null
@@ -206,7 +192,7 @@ export function computeHealthPlan(
   const healthScore = calculateHealthScore(
     todayMetric,
     { calories: weightLossPlan.dailyCalorieTarget, protein: weightLossPlan.proteinTargetG, steps: 10000 },
-    habits,
+    workouts,
     today
   )
 

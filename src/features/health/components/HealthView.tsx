@@ -1,19 +1,17 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, Trash2, X, Flame, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
+import { Plus, Trash2, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
-import { addHabit, logHabit, unlogHabit, deleteHabit, upsertTodayMetric, logWorkout, deleteWorkout } from '../actions'
+import { upsertTodayMetric, logWorkout, deleteWorkout } from '../actions'
 import { getHealthReport } from '@/features/ai/health-report'
 import { computeHealthPlan } from '../calculations'
 import HealthProfileForm from './HealthProfileForm'
 import HealthScoreHero from './HealthScoreHero'
 import TodaysPlanCard from './TodaysPlanCard'
 import MetricChart from './MetricChart'
-import type { HabitWithLogs, HealthMetric, MetricField, HealthProfile, Workout } from '../types'
-
-const ICONS = ['🏋️', '💧', '😴', '🧘', '📚', '🏃', '🥗', '💊', '🚴', '✍️']
+import type { HealthMetric, MetricField, HealthProfile, Workout } from '../types'
 
 const METRICS: { field: MetricField; label: string; emoji: string; unit: string; decimals?: number }[] = [
   { field: 'weight_kg',      label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
@@ -31,19 +29,6 @@ function getLast7Days() {
     d.setDate(d.getDate() - (6 - i))
     return d.toISOString().split('T')[0]
   })
-}
-
-function getStreak(logs: { date: string }[]): number {
-  const dates = new Set(logs.map(l => l.date))
-  let streak = 0
-  const today = new Date()
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    if (dates.has(d.toISOString().split('T')[0])) streak++
-    else break
-  }
-  return streak
 }
 
 function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekAvg, onSave, saving, leftText }: {
@@ -91,7 +76,6 @@ function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekA
 }
 
 interface Props {
-  initialHabits: HabitWithLogs[]
   initialMetrics: HealthMetric[]
   initialProfile: HealthProfile | null
   initialWorkouts: Workout[]
@@ -99,10 +83,7 @@ interface Props {
 
 const WORKOUT_TYPES = ['Strength', 'Cardio', 'Run', 'Yoga', 'Sports', 'Other']
 
-export default function HealthView({ initialHabits, initialMetrics, initialProfile, initialWorkouts }: Props) {
-  const [showForm, setShowForm] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newIcon, setNewIcon] = useState('🏋️')
+export default function HealthView({ initialMetrics, initialProfile, initialWorkouts }: Props) {
   const [workoutType, setWorkoutType] = useState('Strength')
   const [workoutDuration, setWorkoutDuration] = useState('')
 
@@ -114,7 +95,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
       return state
     }
   )
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [saving, setSaving] = useState<MetricField | null>(null)
   const [metrics, setMetrics] = useState<HealthMetric[]>(initialMetrics)
   const [aiReport, setAiReport] = useState<string | null>(null)
@@ -157,35 +138,6 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
     }
   }
 
-  const [habits, updateHabits] = useOptimistic(
-    initialHabits,
-    (state: HabitWithLogs[], action: { type: string; payload: Record<string, string> }) => {
-      if (action.type === 'add') return [...state, { id: `temp-${Date.now()}`, user_id: '', name: action.payload.name, icon: action.payload.icon, created_at: new Date().toISOString(), logs: [] }]
-      if (action.type === 'log') return state.map(h => h.id === action.payload.habitId ? { ...h, logs: [...h.logs, { id: `temp-log`, user_id: '', habit_id: action.payload.habitId, date: action.payload.date, created_at: new Date().toISOString() }] } : h)
-      if (action.type === 'unlog') return state.map(h => h.id === action.payload.habitId ? { ...h, logs: h.logs.filter(l => l.date !== action.payload.date) } : h)
-      if (action.type === 'delete') return state.filter(h => h.id !== action.payload.id)
-      return state
-    }
-  )
-
-  const handleAdd = () => {
-    if (!newName.trim()) return
-    const name = newName.trim(); const icon = newIcon
-    setNewName(''); setShowForm(false)
-    startTransition(async () => { updateHabits({ type: 'add', payload: { name, icon } }); await addHabit(name, icon) })
-  }
-
-  const handleToggle = (habitId: string, date: string, logged: boolean) => {
-    startTransition(async () => {
-      if (logged) { updateHabits({ type: 'unlog', payload: { habitId, date } }); await unlogHabit(habitId, date) }
-      else { updateHabits({ type: 'log', payload: { habitId, date } }); await logHabit(habitId, date) }
-    })
-  }
-
-  const handleDelete = (id: string) => {
-    startTransition(async () => { updateHabits({ type: 'delete', payload: { id } }); await deleteHabit(id) })
-  }
-
   const handleLogWorkout = () => {
     const duration = workoutDuration ? parseInt(workoutDuration, 10) : null
     const type = workoutType
@@ -200,10 +152,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
     startTransition(async () => { updateWorkouts({ type: 'delete', payload: { id } }); await deleteWorkout(id) })
   }
 
-  const completedToday = habits.filter(h => h.logs.some(l => l.date === today)).length
-  const bestStreak = habits.length > 0 ? Math.max(...habits.map(h => getStreak(h.logs))) : 0
-
-  const healthPlan = computeHealthPlan(profile, metrics, habits, today)
+  const healthPlan = computeHealthPlan(profile, metrics, workouts, today)
   const weightLossPlan = healthPlan?.weightLossPlan ?? null
   const healthScore = healthPlan?.healthScore ?? null
 
@@ -250,7 +199,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
       {profile && weightLossPlan && healthScore && (
         <>
           <HealthScoreHero score={healthScore} />
-          <TodaysPlanCard profile={profile} plan={weightLossPlan} todayMetric={todayMetric} habits={habits} score={healthScore} today={today} />
+          <TodaysPlanCard profile={profile} plan={weightLossPlan} todayMetric={todayMetric} score={healthScore} today={today} />
           <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div>
               <p className="text-lg font-bold text-white">{weightLossPlan.dailyCalorieTarget}</p>
@@ -277,18 +226,14 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
       )}
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
-          <span className="text-2xl font-bold text-accent">{completedToday}/{habits.length}</span>
-          <span className="text-xs text-slate-500 mt-1">Habits today</span>
-        </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
           <span className="text-2xl font-bold text-slate-200">{todayMetric?.weight_kg ?? '—'}</span>
           <span className="text-xs text-slate-500 mt-1">Weight (kg)</span>
         </div>
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
-          <span className="text-2xl font-bold text-amber-400">{bestStreak}</span>
-          <span className="text-xs text-slate-500 mt-1">Best streak</span>
+          <span className="text-2xl font-bold text-slate-200">{workouts.length}</span>
+          <span className="text-xs text-slate-500 mt-1">Workouts today</span>
         </div>
       </div>
 
@@ -313,7 +258,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
         </div>
       </div>
 
-      {/* Workouts — structured, separate from generic habit checkboxes */}
+      {/* Workouts */}
       <Card title="Workouts" action={<span className="text-xs text-slate-500">{workouts.length} today</span>}>
         <div className="flex gap-2 mb-4">
           <select
@@ -410,87 +355,7 @@ export default function HealthView({ initialHabits, initialMetrics, initialProfi
         )}
       </div>
 
-      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Habits today: ${completedToday}/${habits.length} done. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
-
-      {/* Habit tracker */}
-      <Card title="Weekly Habits" action={
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
-          <Plus size={12} /> Add habit
-        </button>
-      }>
-        <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr repeat(7, 2rem)' }}>
-          <span className="text-xs text-slate-600">Habit</span>
-          {days.map(d => (
-            <span key={d} className={`text-xs text-center font-medium ${d === today ? 'text-accent' : 'text-slate-600'}`}>
-              {new Date(d + 'T00:00:00').toLocaleDateString('en', { weekday: 'short' }).slice(0, 1)}
-            </span>
-          ))}
-          <span />
-        </div>
-
-        {habits.length === 0 && <p className="text-sm text-slate-600 text-center py-8">No habits yet — add one above</p>}
-
-        <ul className="space-y-2">
-          {habits.map(habit => {
-            const streak = getStreak(habit.logs)
-            return (
-              <li key={habit.id} className="grid items-center gap-2 group" style={{ gridTemplateColumns: '1fr repeat(7, 2rem) 1.5rem' }}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base">{habit.icon}</span>
-                  <span className="text-sm text-slate-300 truncate">{habit.name}</span>
-                  {streak > 0 && <span className="flex items-center gap-0.5 text-xs text-amber-400 shrink-0"><Flame size={10} />{streak}</span>}
-                </div>
-                {days.map(date => {
-                  const logged = habit.logs.some(l => l.date === date)
-                  return (
-                    <button key={date} onClick={() => handleToggle(habit.id, date, logged)} disabled={isPending}
-                      className={`w-8 h-8 rounded-lg border transition-colors ${logged ? 'bg-accent border-accent text-white' : date === today ? 'bg-surface-2 border-accent/30 hover:border-accent/60' : 'bg-surface-2 border-surface-3 hover:border-slate-500'}`}>
-                      {logged && <span className="text-xs">✓</span>}
-                    </button>
-                  )
-                })}
-                <button onClick={() => handleDelete(habit.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
-                  <Trash2 size={12} />
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      </Card>
-
-      {/* Add habit modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-slate-200">New Habit</h2>
-              <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
-                <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Morning workout" autoFocus
-                  className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">Icon</label>
-                <div className="flex flex-wrap gap-2">
-                  {ICONS.map(icon => (
-                    <button key={icon} onClick={() => setNewIcon(icon)}
-                      className={`w-9 h-9 rounded-lg text-lg border transition-colors ${newIcon === icon ? 'bg-accent/20 border-accent' : 'bg-surface-2 border-surface-3 hover:border-slate-500'}`}>
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                <button onClick={handleAdd} disabled={!newName.trim()} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">Add Habit</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
     </div>
   )
 }

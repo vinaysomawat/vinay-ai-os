@@ -18,7 +18,6 @@ const SUB_SCORES: { key: keyof Omit<HealthScoreBreakdown, 'overall'>; label: str
   { key: 'nutrition',   label: 'Nutrition',   color: '#22c55e' },
   { key: 'sleep',       label: 'Sleep',       color: '#a78bfa' },
   { key: 'activity',    label: 'Activity',    color: '#06b6d4' },
-  { key: 'consistency', label: 'Consistency', color: '#f59e0b' },
 ]
 
 export default function HealthScoreHero({ score }: { score: HealthScoreBreakdown }) {
@@ -57,7 +56,7 @@ export default function HealthScoreHero({ score }: { score: HealthScoreBreakdown
 
         <div className="flex-1 w-full">
           <p className={`text-sm font-bold mb-3 ${levelColor}`}>{level}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {SUB_SCORES.map(({ key, label, color }) => {
               const s = score[key]
               return (

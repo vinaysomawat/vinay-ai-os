@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-// Refreshes the dashboard server data when habit_logs or tasks change
+// Refreshes the dashboard server data when workouts or tasks change
 // (e.g. after logging via Telegram bot)
 export default function RealtimeRefresh() {
   const router = useRouter()
@@ -18,9 +18,9 @@ export default function RealtimeRefresh() {
   useEffect(() => {
     const supabase = createClient()
 
-    const habitSub = supabase
-      .channel('habit_logs_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'habit_logs' }, refresh)
+    const workoutSub = supabase
+      .channel('workouts_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts' }, refresh)
       .subscribe()
 
     const taskSub = supabase
@@ -34,7 +34,7 @@ export default function RealtimeRefresh() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(habitSub)
+      supabase.removeChannel(workoutSub)
       supabase.removeChannel(taskSub)
       supabase.removeChannel(metricSub)
     }

@@ -11,6 +11,10 @@ interface Props {
   lowerIsBetter?: boolean
 }
 
+const VIEW_W = 100
+const VIEW_H = 40
+const PAD_Y = 4
+
 export default function MetricChart({ metrics, field, label, unit, decimals = 0, lowerIsBetter = false }: Props) {
   const withValue = [...metrics]
     .filter(m => m[field] !== null)
@@ -28,20 +32,39 @@ export default function MetricChart({ metrics, field, label, unit, decimals = 0,
   const trend = values[values.length - 1] - values[0]
   const trendIsGood = lowerIsBetter ? trend < 0 : trend > 0
 
+  const points = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * VIEW_W,
+    y: PAD_Y + (1 - (v - min) / range) * (VIEW_H - PAD_Y * 2),
+    date: withValue[i].date,
+    v,
+  }))
+  const linePath = points.map(p => `${p.x},${p.y}`).join(' ')
+  const areaPath = `0,${VIEW_H} ${linePath} ${VIEW_W},${VIEW_H}`
+  const last = points[points.length - 1]
+
   return (
     <div>
-      <div className="flex items-end gap-1 h-14">
-        {withValue.map((m, i) => {
-          const v = m[field] as number
-          const h = Math.round(((v - min) / range) * 44 + 4)
-          const isLatest = i === withValue.length - 1
-          return (
-            <div key={m.date} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-              <div className={`w-full rounded-sm transition-all ${isLatest ? 'bg-accent' : 'bg-surface-3'}`} style={{ height: `${h}px` }} />
-              <span className="text-xs text-slate-700 hidden sm:block">{new Date(m.date + 'T12:00:00').getDate()}</span>
-            </div>
-          )
-        })}
+      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="none" className="w-full h-14" role="img" aria-label={`${label} trend over ${withValue.length} days`}>
+        <polygon points={areaPath} className="fill-accent/10" />
+        <polyline
+          points={linePath}
+          fill="none"
+          className="stroke-accent"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {points.map(p => (
+          <circle key={p.date} cx={p.x} cy={p.y} r={p === last ? 2.5 : 1.5} className={p === last ? 'fill-accent' : 'fill-surface-3'} vectorEffect="non-scaling-stroke">
+            <title>{`${new Date(p.date + 'T12:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric' })}: ${p.v.toFixed(decimals)} ${unit}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div className="flex justify-between mt-1">
+        {withValue.map(m => (
+          <span key={m.date} className="text-xs text-slate-700 hidden sm:block">{new Date(m.date + 'T12:00:00').getDate()}</span>
+        ))}
       </div>
       <p className={`text-xs mt-2 font-medium ${trend === 0 ? 'text-slate-500' : trendIsGood ? 'text-green-400' : 'text-red-400'}`}>
         {trend < 0 ? `↓ ${Math.abs(trend).toFixed(decimals)} ${unit}` : trend > 0 ? `↑ ${trend.toFixed(decimals)} ${unit}` : '→ Stable'} over {withValue.length} days

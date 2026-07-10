@@ -1,7 +1,7 @@
 'use server'
 
 import { askAI } from '@/lib/ai-gateway'
-import type { HealthMetric, HealthProfile, HabitWithLogs } from '@/features/health/types'
+import type { HealthMetric, HealthProfile } from '@/features/health/types'
 import type { WeightLossPlan, HealthScoreBreakdown } from '@/features/health/calculations'
 
 export async function getHealthReport(metrics: HealthMetric[]): Promise<string> {
@@ -45,7 +45,6 @@ export async function getDailyHealthPlan(
   profile: HealthProfile,
   plan: WeightLossPlan,
   todayMetric: HealthMetric | null,
-  habits: HabitWithLogs[],
   score: HealthScoreBreakdown,
   today: string
 ): Promise<string> {
@@ -53,7 +52,6 @@ export async function getDailyHealthPlan(
   const proteinLeft = plan.proteinTargetG - (todayMetric?.protein_g ?? 0)
   const waterLeft = 3000 - (todayMetric?.water_ml ?? 0)
   const stepsLogged = todayMetric?.steps ?? 0
-  const habitsStatus = habits.map(h => `${h.name}: ${h.logs.some(l => l.date === today) ? 'done' : 'not done'}`).join(', ') || 'no habits set up'
 
   const prompt = `Vinay's daily health plan for today. His goal: lose weight from his current weight toward ${profile.target_weight_kg}kg by ${plan.expectedGoalDate} (${plan.daysRemaining} days away, ~${plan.weeklyLossKg}kg/week).
 
@@ -63,9 +61,7 @@ Logged so far today: calories=${todayMetric?.calories ?? 'not logged'}, protein=
 
 Remaining today: ${caloriesLeft > 0 ? `${caloriesLeft} kcal left` : 'calorie budget used up'}, ${proteinLeft > 0 ? `${proteinLeft}g protein left` : 'protein target hit'}, ${waterLeft > 0 ? `${waterLeft}ml water left` : 'water target hit'}.
 
-Habits today: ${habitsStatus}.
-
-Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score} — ${score.nutrition.reason}; Sleep ${score.sleep.score} — ${score.sleep.reason}; Activity ${score.activity.score} — ${score.activity.reason}; Consistency ${score.consistency.score} — ${score.consistency.reason}).
+Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score} — ${score.nutrition.reason}; Sleep ${score.sleep.score} — ${score.sleep.reason}; Activity ${score.activity.score} — ${score.activity.reason}).
 
 Write today's action plan as a short checklist (6-8 lines, each starting with an emoji), covering what's left to eat, water, steps/workout, and sleep timing. End with one sentence explaining why these matter for hitting his weight goal on time. Be specific to the numbers above — no generic advice. Plain text only — no markdown (no **, no #, no bullet dashes). Keep it under 150 words.`
 

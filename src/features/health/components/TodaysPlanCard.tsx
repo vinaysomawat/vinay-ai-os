@@ -3,19 +3,18 @@
 import { useState } from 'react'
 import { Sparkles, ChevronDown } from 'lucide-react'
 import { getDailyHealthPlan } from '@/features/ai/health-report'
-import type { HealthMetric, HealthProfile, HabitWithLogs } from '../types'
+import type { HealthMetric, HealthProfile } from '../types'
 import type { WeightLossPlan, HealthScoreBreakdown } from '../calculations'
 
 interface Props {
   profile: HealthProfile
   plan: WeightLossPlan
   todayMetric: HealthMetric | null
-  habits: HabitWithLogs[]
   score: HealthScoreBreakdown
   today: string
 }
 
-export default function TodaysPlanCard({ profile, plan, todayMetric, habits, score, today }: Props) {
+export default function TodaysPlanCard({ profile, plan, todayMetric, score, today }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [text, setText] = useState<string | null>(null)
@@ -26,7 +25,7 @@ export default function TodaysPlanCard({ profile, plan, todayMetric, habits, sco
     setOpen(true)
     setLoading(true)
     try {
-      const result = await getDailyHealthPlan(profile, plan, todayMetric, habits, score, today)
+      const result = await getDailyHealthPlan(profile, plan, todayMetric, score, today)
       setText(result)
     } finally {
       setLoading(false)

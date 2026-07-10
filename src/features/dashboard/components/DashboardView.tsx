@@ -50,13 +50,6 @@ function computeInsights(
 ): string[] {
   const items: string[] = []
 
-  if (stats.totalHabits > 0) {
-    const rem = stats.totalHabits - stats.habitsDoneToday
-    items.push(rem === 0
-      ? `All ${stats.totalHabits} habits done today`
-      : `${stats.habitsDoneToday}/${stats.totalHabits} habits done — ${rem} remaining`)
-  }
-
   if ((stats.monthBudget ?? 0) > 0) {
     const rem = (stats.monthBudget ?? 0) - stats.monthSpend
     const fmt = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString('en-IN')}`
@@ -115,7 +108,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   const modules = [
     { label: 'Planner',   to: '/planner',   icon: CalendarDays, color: 'text-blue-400',   bg: 'bg-blue-500/10',   stat: stats.pendingTaskCount ? `${stats.pendingTaskCount} pending` : 'All clear' },
     { label: 'Career',    to: '/career',    icon: Briefcase,    color: 'text-amber-400',  bg: 'bg-amber-500/10',  stat: stats.activeApplications ? `${stats.activeApplications} active` : 'No applications' },
-    { label: 'Health',    to: '/health',    icon: HeartPulse,   color: 'text-red-400',    bg: 'bg-red-500/10',    stat: todayHealth?.steps ? `${(Number(todayHealth.steps)/1000).toFixed(1)}k steps` : `${stats.habitsDoneToday}/${stats.totalHabits} habits` },
+    { label: 'Health',    to: '/health',    icon: HeartPulse,   color: 'text-red-400',    bg: 'bg-red-500/10',    stat: todayHealth?.steps ? `${(Number(todayHealth.steps)/1000).toFixed(1)}k steps` : stats.workoutsToday ? `${stats.workoutsToday} workout${stats.workoutsToday > 1 ? 's' : ''} today` : 'No metrics today' },
     { label: 'Finance',   to: '/finance',   icon: DollarSign,   color: 'text-green-400',  bg: 'bg-green-500/10',  stat: stats.monthSpend ? `₹${Math.round(stats.monthSpend).toLocaleString('en-IN')} spent` : 'No expenses' },
     { label: 'Learning',  to: '/learning',  icon: BookOpen,     color: 'text-purple-400', bg: 'bg-purple-500/10', stat: stats.learningInProgress ? `${stats.learningInProgress} in progress` : 'No resources' },
     { label: 'Coding',    to: '/coding',    icon: Code2,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   stat: stats.githubCommits ? `${stats.githubCommits} commits (30d)` : stats.activeProjects ? `${stats.activeProjects} active` : 'No projects' },

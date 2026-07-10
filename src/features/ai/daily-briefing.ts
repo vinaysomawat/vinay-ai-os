@@ -10,11 +10,9 @@ export async function generateDailyBriefing(db: SupabaseClient, userId: string):
   const monthStart = today.slice(0, 7) + '-01'
 
   const [
-    habitsRes, logsRes, expensesRes, budgetsRes, resourcesRes,
+    expensesRes, budgetsRes, resourcesRes,
     appsRes, projectsRes, scoreRes,
   ] = await Promise.all([
-    db.from('habits').select('id').eq('user_id', userId),
-    db.from('habit_logs').select('habit_id').eq('user_id', userId).eq('date', today),
     db.from('expenses').select('amount').eq('user_id', userId).gte('date', monthStart),
     db.from('budgets').select('amount').eq('user_id', userId).eq('month', today.slice(0, 7)),
     db.from('resources').select('status').eq('user_id', userId),
@@ -23,8 +21,6 @@ export async function generateDailyBriefing(db: SupabaseClient, userId: string):
     db.from('life_score_logs').select('life_score').eq('user_id', userId).order('date', { ascending: false }).limit(2),
   ])
 
-  const habits = habitsRes.data ?? []
-  const todayLogs = logsRes.data ?? []
   const monthSpend = (expensesRes.data ?? []).reduce((s: number, e: { amount: number }) => s + (e.amount ?? 0), 0)
   const monthBudget = (budgetsRes.data ?? []).reduce((s: number, b: { amount: number }) => s + (b.amount ?? 0), 0)
   const resources = resourcesRes.data ?? []
@@ -42,7 +38,6 @@ export async function generateDailyBriefing(db: SupabaseClient, userId: string):
   const prompt = `Morning briefing for Vinay. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.
 
 Life Score: ${lifeScore}/100${delta !== null ? ` (${delta >= 0 ? '+' : ''}${delta} from yesterday)` : ''}
-Habits done: ${todayLogs.length}/${habits.length}
 Budget: ₹${Math.round(monthSpend).toLocaleString('en-IN')} of ₹${Math.round(monthBudget).toLocaleString('en-IN')} this month
 Active applications: ${activeApps}
 Learning in progress: ${inProgress} resources
