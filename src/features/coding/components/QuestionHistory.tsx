@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Star, RotateCcw, ExternalLink } from 'lucide-react'
+import { Star, RotateCcw, ExternalLink, CheckCircle2, Circle } from 'lucide-react'
 import Card from '@/components/Card'
-import { toggleFavorite, toggleRevisionFlag } from '../daily'
+import { toggleFavorite, toggleRevisionFlag, markQuestionComplete } from '../daily'
 import type { DailyQuestion } from '../daily-core'
 
 const DIFFICULTY_COLOR: Record<string, string> = {
@@ -38,6 +38,11 @@ export default function QuestionHistory({ initialHistory }: { initialHistory: Da
     startTransition(async () => { await toggleRevisionFlag(id) })
   }
 
+  const handleComplete = (id: string) => {
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, completed: true } : h))
+    startTransition(async () => { await markQuestionComplete(id) })
+  }
+
   const filters: { key: Filter; label: string }[] = [
     { key: 'all', label: 'All' }, { key: 'completed', label: 'Completed' }, { key: 'pending', label: 'Pending' },
     { key: 'revision', label: 'Revision' }, { key: 'favorites', label: 'Favorites' },
@@ -63,6 +68,10 @@ export default function QuestionHistory({ initialHistory }: { initialHistory: Da
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_COLOR[h.question.difficulty]}`}>{h.question.difficulty}</span>
               <span className={`flex-1 min-w-0 text-sm truncate ${h.completed ? 'text-slate-400' : 'text-slate-300'}`}>{h.question.title}</span>
               <span className="text-xs text-slate-600 shrink-0">{h.assigned_date}</span>
+              <button onClick={() => !h.completed && handleComplete(h.id)} disabled={h.completed}
+                className={`shrink-0 transition-colors ${h.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
+                {h.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+              </button>
               <button onClick={() => handleFavorite(h.id)} className={`shrink-0 transition-colors ${h.favorite ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}`}>
                 <Star size={13} fill={h.favorite ? 'currentColor' : 'none'} />
               </button>

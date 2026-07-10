@@ -84,6 +84,19 @@ export async function deleteLoan(id: string) {
   revalidatePath('/finance')
 }
 
+// Lets a rate change or a principal prepayment be reflected without deleting
+// and re-adding the loan.
+export async function updateLoanTerms(id: string, updates: { emi?: number; interestRate?: number | null; remainingMonths?: number | null }) {
+  const supabase = await createClient()
+  const patch: Record<string, number | null> = {}
+  if (updates.emi !== undefined) patch.emi = updates.emi
+  if (updates.interestRate !== undefined) patch.interest_rate = updates.interestRate
+  if (updates.remainingMonths !== undefined) patch.remaining_months = updates.remainingMonths
+  const { error } = await supabase.from('loans').update(patch).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
 export async function addInvestment(name: string, type: InvestmentType, investedAmount: number, currentValue: number, notes: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -96,6 +109,15 @@ export async function addInvestment(name: string, type: InvestmentType, invested
 export async function updateInvestmentValue(id: string, currentValue: number) {
   const supabase = await createClient()
   const { error } = await supabase.from('investments').update({ current_value: currentValue, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
+// Lets a SIP's invested_amount be topped up each installment without
+// deleting and re-adding the investment.
+export async function updateInvestmentAmount(id: string, investedAmount: number) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('investments').update({ invested_amount: investedAmount, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/finance')
 }

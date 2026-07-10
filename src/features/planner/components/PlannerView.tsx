@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, CheckCircle2, Circle, Trash2, Sparkles, Timer } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, Timer } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { addTask, toggleTask, deleteTask, logFocusSession, deleteFocusSession } from '../actions'
-import { smartSortAndFocus } from '@/features/ai/smart-sort'
 import { RefreshCw } from 'lucide-react'
 import type { Task, Priority, Recurrence, FocusSession } from '../types'
 
@@ -29,8 +28,6 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
   const [area, setArea] = useState('General')
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [aiSorting, setAiSorting] = useState(false)
-  const [focusHint, setFocusHint] = useState<string | null>(null)
   const [focusDuration, setFocusDuration] = useState('')
   const [focusLabel, setFocusLabel] = useState('')
 
@@ -46,7 +43,7 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
 
   const [optimisticTasks, updateOptimisticTasks] = useOptimistic(
     initialTasks,
-    (state: Task[], action: { type: string; payload: Partial<Task> & { id?: string } | Task[] }) => {
+    (state: Task[], action: { type: string; payload: Partial<Task> & { id?: string } }) => {
       if (action.type === 'add') return [action.payload as Task, ...state]
       if (action.type === 'toggle') {
         const p = action.payload as Partial<Task>
@@ -55,10 +52,6 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
       if (action.type === 'delete') {
         const p = action.payload as Partial<Task>
         return state.filter(t => t.id !== p.id)
-      }
-      if (action.type === 'reorder') {
-        const ordered = action.payload as Task[]
-        return ordered
       }
       return state
     }
@@ -137,22 +130,6 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
     })
   }
 
-  const handleSmartSort = async () => {
-    if (pending.length < 2) return
-    setAiSorting(true)
-    setFocusHint(null)
-    try {
-      const { order, focus } = await smartSortAndFocus(pending)
-      const idToTask = new Map(pending.map(t => [t.id, t]))
-      const reordered = order.map(id => idToTask.get(id)).filter(Boolean) as Task[]
-      const missing = pending.filter(t => !order.includes(t.id))
-      updateOptimisticTasks({ type: 'reorder', payload: [...reordered, ...missing, ...done] })
-      setFocusHint(focus)
-    } finally {
-      setAiSorting(false)
-    }
-  }
-
   return (
     <div className="space-y-5">
       {/* Week strip */}
@@ -174,31 +151,9 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
         ))}
       </div>
 
-      {/* AI focus hint */}
-      {focusHint && (
-        <div className="flex items-start gap-2.5 px-4 py-3 bg-accent/10 border border-accent/20 rounded-xl">
-          <Sparkles size={14} className="text-accent mt-0.5 shrink-0" />
-          <p className="text-sm text-slate-300">{focusHint}</p>
-        </div>
-      )}
-
       <Card
         title="Today's Tasks"
-        action={
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-500">{pending.length} remaining</span>
-            {pending.length >= 2 && (
-              <button
-                onClick={handleSmartSort}
-                disabled={aiSorting}
-                className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors disabled:opacity-50"
-              >
-                <Sparkles size={11} />
-                {aiSorting ? 'Sorting...' : 'AI Sort'}
-              </button>
-            )}
-          </div>
-        }
+        action={<span className="text-xs text-slate-500">{pending.length} remaining</span>}
       >
         {/* Add task row */}
         <div className="flex gap-2 mb-4">
@@ -242,11 +197,8 @@ export default function PlannerView({ initialTasks, initialFocusSessions }: Prop
           <p className="text-sm text-slate-600 text-center py-6">No tasks — add one above</p>
         )}
         <ul className="space-y-1.5">
-          {pending.map((task, i) => (
+          {pending.map(task => (
             <li key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
-              {aiSorting && (
-                <span className="text-xs text-accent/60 font-mono w-4 shrink-0">{i + 1}</span>
-              )}
               <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
                 <Circle size={16} className="text-slate-600 group-hover:text-accent transition-colors" />
               </button>

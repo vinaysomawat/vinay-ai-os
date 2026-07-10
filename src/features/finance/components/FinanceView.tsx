@@ -6,8 +6,8 @@ import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import {
   addExpense, deleteExpense, upsertBudget,
-  upsertProfile, addLoan, deleteLoan,
-  addInvestment, updateInvestmentValue, deleteInvestment,
+  upsertProfile, addLoan, deleteLoan, updateLoanTerms,
+  addInvestment, updateInvestmentValue, updateInvestmentAmount, deleteInvestment,
   addGoal, updateGoalProgress, deleteGoal,
 } from '../actions'
 import { askFinanceAdvisor } from '@/features/ai/finance-advisor'
@@ -30,19 +30,21 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
 }
 
-function InlineEdit({ value, onSave, prefix = '₹', placeholder = '0' }: { value: string; onSave: (v: string) => void; prefix?: string; placeholder?: string }) {
+function InlineEdit({ value, onSave, prefix = '₹', suffix = '', placeholder = '0', textSize = 'text-sm', inputWidth = 'w-32' }: {
+  value: string; onSave: (v: string) => void; prefix?: string; suffix?: string; placeholder?: string; textSize?: string; inputWidth?: string
+}) {
   const [editing, setEditing] = useState(false)
   const [input, setInput] = useState(value)
 
   if (!editing) return (
-    <button onClick={() => { setInput(value); setEditing(true) }} className="flex items-center gap-1 group">
-      <span>{prefix}{value || placeholder}</span>
+    <button onClick={() => { setInput(value); setEditing(true) }} className={`flex items-center gap-1 group ${textSize}`}>
+      <span>{prefix}{value || placeholder}{suffix}</span>
       <Pencil size={10} className="opacity-0 group-hover:opacity-50 transition-opacity" />
     </button>
   )
   return (
     <div className="flex items-center gap-1">
-      <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { onSave(input); setEditing(false) } if (e.key === 'Escape') setEditing(false) }} autoFocus className="w-32 bg-surface-2 border border-accent rounded px-2 py-0.5 text-sm outline-none" />
+      <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { onSave(input); setEditing(false) } if (e.key === 'Escape') setEditing(false) }} autoFocus className={`${inputWidth} bg-surface-2 border border-accent rounded px-2 py-0.5 ${textSize} outline-none`} />
       <button onClick={() => { onSave(input); setEditing(false) }} className="text-green-400"><Check size={12} /></button>
     </div>
   )
@@ -76,7 +78,6 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const [editingBudget, setEditingBudget] = useState<string | null>(null)
   const [budgetInput, setBudgetInput] = useState('')
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
-  const [editingInvId, setEditingInvId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
 
   // AI Advisor
@@ -92,9 +93,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const invested = localInvestments.reduce((s, i) => s + Number(i.invested_amount), 0)
   const totalDebt = localLoans.reduce((s, l) => s + Number(l.emi) * (l.remaining_months ?? 0), 0)
   const netWorth = portfolio - totalDebt
-  const freeCash = salary - totalEMIs - avgMonthlyExpense
-
   const totalSpent = localExpenses.reduce((s, e) => s + Number(e.amount), 0)
+  const freeCash = salary - totalEMIs - totalSpent
   const totalBudget = localBudgets.reduce((s, b) => s + Number(b.amount), 0)
   const remaining = totalBudget - totalSpent
 
@@ -125,13 +125,43 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
     startTransition(() => deleteInvestment(id))
   }
 
-  const handleInvValueSave = (id: string) => {
-    const v = parseFloat(editInput)
-    if (!isNaN(v)) {
-      setLocalInvestments(prev => prev.map(i => i.id === id ? { ...i, current_value: v } : i))
-      startTransition(() => updateInvestmentValue(id, v))
-    }
-    setEditingInvId(null)
+  const handleInvValueSave = (id: string, v: string) => {
+    const n = parseFloat(v)
+    if (isNaN(n)) return
+    setLocalInvestments(prev => prev.map(i => i.id === id ? { ...i, current_value: n } : i))
+    startTransition(() => updateInvestmentValue(id, n))
+  }
+
+  // SIP top-ups grow invested_amount each installment — edit in place instead
+  // of deleting and re-adding the investment.
+  const handleInvAmountSave = (id: string, v: string) => {
+    const n = parseFloat(v)
+    if (isNaN(n)) return
+    setLocalInvestments(prev => prev.map(i => i.id === id ? { ...i, invested_amount: n } : i))
+    startTransition(() => updateInvestmentAmount(id, n))
+  }
+
+  // A rate change or a principal prepayment shows up here without deleting
+  // and re-adding the loan.
+  const handleLoanEmiSave = (id: string, v: string) => {
+    const n = parseFloat(v)
+    if (isNaN(n)) return
+    setLocalLoans(prev => prev.map(l => l.id === id ? { ...l, emi: n } : l))
+    startTransition(() => updateLoanTerms(id, { emi: n }))
+  }
+
+  const handleLoanRateSave = (id: string, v: string) => {
+    const n = v.trim() === '' ? null : parseFloat(v)
+    if (n !== null && isNaN(n)) return
+    setLocalLoans(prev => prev.map(l => l.id === id ? { ...l, interest_rate: n } : l))
+    startTransition(() => updateLoanTerms(id, { interestRate: n }))
+  }
+
+  const handleLoanMonthsSave = (id: string, v: string) => {
+    const n = v.trim() === '' ? null : parseInt(v, 10)
+    if (n !== null && isNaN(n)) return
+    setLocalLoans(prev => prev.map(l => l.id === id ? { ...l, remaining_months: n } : l))
+    startTransition(() => updateLoanTerms(id, { remainingMonths: n }))
   }
 
   const handleGoalProgressSave = (id: string) => {
@@ -230,8 +260,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           <span className="text-red-400 font-medium">{fmt(totalEMIs)}</span>
           <span className="text-slate-600">EMIs</span>
           <span className="text-slate-600">−</span>
-          <span className="text-amber-400 font-medium">{fmt(avgMonthlyExpense)}</span>
-          <span className="text-slate-600">avg spend</span>
+          <span className="text-amber-400 font-medium">{fmt(totalSpent)}</span>
+          <span className="text-slate-600">spend</span>
           <span className="text-slate-600">=</span>
           <span className={`font-bold text-base ${freeCash >= 0 ? 'text-accent' : 'text-red-400'}`}>{fmt(freeCash)}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${freeCash >= 0 ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
@@ -252,7 +282,6 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           ) : (
             <ul className="space-y-3">
               {localLoans.map(loan => {
-                const paidMonths = loan.remaining_months !== null ? 0 : 0
                 const totalMonths = loan.remaining_months ?? 0
                 const remaining = totalMonths > 0 ? loan.emi * totalMonths : loan.principal
                 return (
@@ -260,10 +289,22 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm text-slate-300 font-medium">{loan.name}</p>
-                        <p className="text-xs text-slate-600 mt-0.5">
-                          {fmt(loan.emi)}/mo · {loan.remaining_months ?? '?'} months left
-                          {loan.interest_rate ? ` · ${loan.interest_rate}% p.a.` : ''}
-                        </p>
+                        <div className="text-xs text-slate-600 mt-0.5 flex items-center flex-wrap gap-x-1">
+                          <InlineEdit
+                            value={String(loan.emi)} prefix="₹" suffix="/mo" textSize="text-xs" inputWidth="w-20"
+                            onSave={v => handleLoanEmiSave(loan.id, v)}
+                          />
+                          <span>·</span>
+                          <InlineEdit
+                            value={loan.remaining_months !== null ? String(loan.remaining_months) : ''} prefix="" suffix=" months left" placeholder="?" textSize="text-xs" inputWidth="w-14"
+                            onSave={v => handleLoanMonthsSave(loan.id, v)}
+                          />
+                          <span>·</span>
+                          <InlineEdit
+                            value={loan.interest_rate !== null ? String(loan.interest_rate) : ''} prefix="" suffix="% p.a." placeholder="set rate" textSize="text-xs" inputWidth="w-14"
+                            onSave={v => handleLoanRateSave(loan.id, v)}
+                          />
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-red-400">{fmt(remaining)}</span>
@@ -306,19 +347,21 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                           </span>
                           <p className="text-sm text-slate-300 truncate">{inv.name}</p>
                         </div>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-xs text-slate-600">invested {fmt(Number(inv.invested_amount))}</span>
-                          {editingInvId === inv.id ? (
-                            <div className="flex items-center gap-1">
-                              <input value={editInput} onChange={e => setEditInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleInvValueSave(inv.id); if (e.key === 'Escape') setEditingInvId(null) }} autoFocus className="w-24 bg-surface-2 border border-accent rounded px-2 py-0.5 text-xs outline-none" />
-                              <button onClick={() => handleInvValueSave(inv.id)} className="text-green-400"><Check size={10} /></button>
-                            </div>
-                          ) : (
-                            <button onClick={() => { setEditingInvId(inv.id); setEditInput(String(inv.current_value)) }} className="text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 group/val">
-                              current {fmt(Number(inv.current_value))}
-                              <Pencil size={8} className="opacity-0 group-hover/val:opacity-50 transition-opacity" />
-                            </button>
-                          )}
+                        <div className="flex items-center gap-3 mt-1 text-xs">
+                          <span className="text-slate-600 flex items-center gap-1">
+                            invested
+                            <InlineEdit
+                              value={String(inv.invested_amount)} prefix="₹" textSize="text-xs" inputWidth="w-24"
+                              onSave={v => handleInvAmountSave(inv.id, v)}
+                            />
+                          </span>
+                          <span className="text-slate-300 font-medium flex items-center gap-1">
+                            current
+                            <InlineEdit
+                              value={String(inv.current_value)} prefix="₹" textSize="text-xs" inputWidth="w-24"
+                              onSave={v => handleInvValueSave(inv.id, v)}
+                            />
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
