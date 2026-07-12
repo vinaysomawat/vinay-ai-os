@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Pencil, Check, Wand2 } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Pencil, Check, Wand2, FileText, Star } from 'lucide-react'
 import Card from '@/components/Card'
 import {
   addApplication, updateStatus, deleteApplication,
   upsertCareerProfile, addSkill, updateSkillLevel, deleteSkill,
   addInterviewQA, updateQAAnswer, deleteInterviewQA,
+  addResumeVersion, setPrimaryResumeVersion, deleteResumeVersion,
 } from '../actions'
 import { askCareerMentor, generateInterviewQuestions } from '@/features/ai/career-mentor'
-import type { Application, AppStatus, CareerProfile, Skill, InterviewQA, SkillLevel, Difficulty } from '../types'
+import type { Application, AppStatus, CareerProfile, Skill, InterviewQA, SkillLevel, Difficulty, ResumeVersion } from '../types'
 import { SKILL_CATEGORIES, SKILL_LEVEL_CONFIG, DIFFICULTY_CONFIG, QA_TOPICS } from '../types'
 
 const STATUS_CONFIG: Record<AppStatus, { label: string; color: string; bg: string }> = {
@@ -56,19 +57,21 @@ interface Props {
   skills: Skill[]
   qa: InterviewQA[]
   codingStreak: number
+  resumeVersions: ResumeVersion[]
 }
 
-export default function CareerView({ applications, profile, skills, qa, codingStreak }: Props) {
+export default function CareerView({ applications, profile, skills, qa, codingStreak, resumeVersions }: Props) {
   const [, startTransition] = useTransition()
 
   const [localApps, setLocalApps] = useState(applications)
   const [localSkills, setLocalSkills] = useState(skills)
   const [localQA, setLocalQA] = useState(qa)
   const [localProfile, setLocalProfile] = useState(profile)
+  const [localResumes, setLocalResumes] = useState(resumeVersions)
 
   const [filterStatus, setFilterStatus] = useState<AppStatus | 'all'>('all')
   const [filterTopic, setFilterTopic] = useState<string>('all')
-  const [modal, setModal] = useState<'app' | 'skill' | 'qa' | 'generate' | null>(null)
+  const [modal, setModal] = useState<'app' | 'skill' | 'qa' | 'generate' | 'resume' | null>(null)
   const [expandedQA, setExpandedQA] = useState<string | null>(null)
   const [editingAnswer, setEditingAnswer] = useState<string | null>(null)
   const [answerInput, setAnswerInput] = useState('')
@@ -103,6 +106,15 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   const handleStatus = (id: string, status: AppStatus) => {
     setLocalApps(prev => prev.map(a => a.id === id ? { ...a, status } : a))
     startTransition(() => updateStatus(id, status))
+  }
+
+  const handleSetPrimaryResume = (id: string) => {
+    setLocalResumes(prev => prev.map(r => ({ ...r, is_primary: r.id === id })))
+    startTransition(() => setPrimaryResumeVersion(id))
+  }
+  const handleDeleteResume = (id: string) => {
+    setLocalResumes(prev => prev.filter(r => r.id !== id))
+    startTransition(() => deleteResumeVersion(id))
   }
 
   const cycleLevel = (skill: Skill) => {
@@ -173,6 +185,41 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           <ProfileField label="Years of Experience" value={localProfile?.years_experience?.toString() ?? ''} onSave={v => saveProfile('years_experience', v)} type="number" placeholder="5" />
           <ProfileField label="Bio / Focus" value={localProfile?.bio ?? ''} onSave={v => saveProfile('bio', v)} placeholder="Frontend + Testing specialist" />
         </div>
+      </Card>
+
+      {/* Resume Versions */}
+      <Card title={`Resume Versions (${localResumes.length})`} action={
+        <button onClick={() => setModal('resume')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
+          <Plus size={12} /> Add
+        </button>
+      }>
+        {localResumes.length === 0 ? (
+          <p className="text-sm text-slate-600 text-center py-6">No resume versions yet — add one to start tracking what you send where</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {localResumes.map(r => (
+              <li key={r.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                <FileText size={14} className="text-slate-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-200 truncate">{r.name}</span>
+                    {r.is_primary && <span className="text-xs px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-medium shrink-0 flex items-center gap-0.5"><Star size={9} fill="currentColor" />Primary</span>}
+                  </div>
+                  {r.notes && <p className="text-xs text-slate-600 mt-0.5 truncate">{r.notes}</p>}
+                </div>
+                {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-600 hover:text-accent transition-colors"><ExternalLink size={13} /></a>}
+                {!r.is_primary && (
+                  <button onClick={() => handleSetPrimaryResume(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-xs text-slate-500 hover:text-accent transition-all">
+                    Set primary
+                  </button>
+                )}
+                <button onClick={() => handleDeleteResume(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                  <Trash2 size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       {/* Skills */}
@@ -342,6 +389,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           <ul className="space-y-2">
             {filtered.map(app => {
               const cfg = STATUS_CONFIG[app.status]
+              const resume = app.resume_version_id ? localResumes.find(r => r.id === app.resume_version_id) : null
               return (
                 <li key={app.id} className="flex items-start gap-3 p-3 rounded-lg bg-surface-2 border border-surface-3 group">
                   <div className="flex-1 min-w-0">
@@ -359,6 +407,11 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                       {app.location && <span className="text-xs text-slate-600">{app.location}</span>}
                       {app.salary_range && <span className="text-xs text-slate-600">{app.salary_range}</span>}
                       <span className="text-xs text-slate-700">{app.applied_at}</span>
+                      {resume && (
+                        <span className="flex items-center gap-1 text-xs text-slate-600">
+                          <FileText size={11} />{resume.name}
+                        </span>
+                      )}
                     </div>
                     {app.notes && <p className="text-xs text-slate-500 mt-1.5 line-clamp-1">{app.notes}</p>}
                   </div>
@@ -376,7 +429,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">
-                {modal === 'app' ? 'Add Application' : modal === 'skill' ? 'Add Skill' : modal === 'qa' ? 'Add Question' : 'Generate Interview Questions'}
+                {modal === 'app' ? 'Add Application' : modal === 'skill' ? 'Add Skill' : modal === 'qa' ? 'Add Question' : modal === 'resume' ? 'Add Resume Version' : 'Generate Interview Questions'}
               </h2>
               <button onClick={() => setModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
@@ -506,6 +559,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                   notes: fd.get('notes') as string || null,
                   applied_at: fd.get('applied_at') as string || new Date().toISOString().split('T')[0],
                   created_at: new Date().toISOString(),
+                  resume_version_id: fd.get('resume_version_id') as string || null,
                 }
                 setLocalApps(prev => [newApp, ...prev])
                 setModal(null)
@@ -547,6 +601,15 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Job URL</label>
                   <input name="url" type="url" placeholder="https://..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                 </div>
+                {localResumes.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 uppercase tracking-wider">Resume Sent</label>
+                    <select name="resume_version_id" defaultValue={localResumes.find(r => r.is_primary)?.id ?? ''} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                      <option value="">Not tracked</option>
+                      {localResumes.map(r => <option key={r.id} value={r.id}>{r.name}{r.is_primary ? ' (primary)' : ''}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Notes</label>
                   <textarea name="notes" rows={2} placeholder="Referral from X, interesting stack..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
@@ -554,6 +617,47 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
                   <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Application</button>
+                </div>
+              </form>
+            )}
+
+            {modal === 'resume' && (
+              <form className="space-y-3" onSubmit={async e => {
+                e.preventDefault()
+                const fd = new FormData(e.currentTarget)
+                const name = fd.get('name') as string
+                const content = fd.get('content') as string || null
+                const url = fd.get('url') as string || null
+                const notes = fd.get('notes') as string || null
+                if (!name) return
+                const newResume: ResumeVersion = {
+                  id: `temp-${Date.now()}`, user_id: '', name, content, url, notes,
+                  is_primary: localResumes.length === 0,
+                  created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                }
+                setLocalResumes(prev => [newResume, ...prev])
+                setModal(null)
+                await addResumeVersion(name, content, url, notes)
+              }}>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Name *</label>
+                  <input name="name" required autoFocus placeholder="Staff FE — Google focus" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Link (Google Doc, PDF, etc.)</label>
+                  <input name="url" type="url" placeholder="https://..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Content (optional — paste resume text)</label>
+                  <textarea name="content" rows={4} placeholder="Paste resume text here if you want it searchable/reviewable..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Notes</label>
+                  <input name="notes" placeholder="What's different about this version" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Resume</button>
                 </div>
               </form>
             )}

@@ -7,16 +7,17 @@ import type { AppStatus, SkillLevel, Difficulty } from './types'
 export async function getCareerData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { applications: [], profile: null, skills: [], qa: [], codingStreak: 0 }
+  if (!user) return { applications: [], profile: null, skills: [], qa: [], codingStreak: 0, resumeVersions: [] }
 
   const { computeCodingStats } = await import('@/features/coding/daily-core')
 
-  const [appsRes, profileRes, skillsRes, qaRes, codingStats] = await Promise.all([
+  const [appsRes, profileRes, skillsRes, qaRes, codingStats, resumeRes] = await Promise.all([
     supabase.from('applications').select('*').order('created_at', { ascending: false }),
     supabase.from('career_profile').select('*').eq('user_id', user.id).single(),
     supabase.from('skills').select('*').eq('user_id', user.id).order('category').order('level'),
     supabase.from('interview_qa').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     computeCodingStats(supabase, user.id),
+    supabase.from('resume_versions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
   ])
 
   return {
@@ -25,6 +26,7 @@ export async function getCareerData() {
     skills: skillsRes.data ?? [],
     qa: qaRes.data ?? [],
     codingStreak: codingStats.currentStreak,
+    resumeVersions: resumeRes.data ?? [],
   }
 }
 
@@ -106,6 +108,7 @@ export async function addApplication(formData: FormData) {
     url: formData.get('url') as string || null,
     notes: formData.get('notes') as string || null,
     applied_at: formData.get('applied_at') as string || new Date().toISOString().split('T')[0],
+    resume_version_id: formData.get('resume_version_id') as string || null,
   })
   if (error) throw new Error(error.message)
   revalidatePath('/career')
@@ -121,6 +124,37 @@ export async function updateStatus(id: string, status: AppStatus) {
 export async function deleteApplication(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('applications').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/career')
+}
+
+export async function addResumeVersion(name: string, content: string | null, url: string | null, notes: string | null) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // First version is automatically primary
+  const { count } = await supabase.from('resume_versions').select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+  const { error } = await supabase.from('resume_versions').insert({
+    user_id: user.id, name, content, url, notes, is_primary: (count ?? 0) === 0,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/career')
+}
+
+export async function setPrimaryResumeVersion(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  await supabase.from('resume_versions').update({ is_primary: false }).eq('user_id', user.id)
+  const { error } = await supabase.from('resume_versions').update({ is_primary: true, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/career')
+}
+
+export async function deleteResumeVersion(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('resume_versions').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/career')
 }

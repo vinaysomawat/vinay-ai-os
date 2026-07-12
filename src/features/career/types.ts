@@ -12,6 +12,19 @@ export interface Application {
   notes: string | null
   applied_at: string
   created_at: string
+  resume_version_id: string | null
+}
+
+export interface ResumeVersion {
+  id: string
+  user_id: string
+  name: string
+  content: string | null
+  url: string | null
+  notes: string | null
+  is_primary: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface CareerProfile {
