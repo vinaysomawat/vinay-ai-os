@@ -579,18 +579,14 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           {localExpenses.length === 0 ? (
             <p className="text-sm text-slate-600 text-center py-4">No expenses this month</p>
           ) : (
-            <ul className="space-y-1 max-h-80 overflow-y-auto">
+            <ul className="space-y-0.5 max-h-80 overflow-y-auto">
               {localExpenses.map(exp => (
-                <li key={exp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_COLOR[exp.category]}`}>{exp.category}</span>
-                      {exp.description && <span className="text-sm text-slate-400 truncate">{exp.description}</span>}
-                    </div>
-                    <p className="text-xs text-slate-600 mt-0.5">{exp.date}</p>
-                  </div>
-                  <span className="text-sm font-medium text-slate-300 shrink-0">{fmt(Number(exp.amount))}</span>
-                  <button onClick={() => handleDeleteExpense(exp.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={13} /></button>
+                <li key={exp.id} className="flex items-center gap-2 py-1 px-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${CATEGORY_COLOR[exp.category]}`}>{exp.category}</span>
+                  <span className="text-xs text-slate-600 shrink-0">{exp.date}</span>
+                  {exp.description && <span className="text-xs text-slate-400 truncate flex-1">{exp.description}</span>}
+                  <span className="text-xs text-slate-300 font-medium shrink-0 ml-auto">{fmt(Number(exp.amount))}</span>
+                  <button onClick={() => handleDeleteExpense(exp.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={11} /></button>
                 </li>
               ))}
             </ul>
