@@ -71,7 +71,7 @@ function computeInsights(
 }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
-  const { pendingTasks, recentApplications, botActivity, stats, scores, todayHealth, aiBudget, topActions } = data
+  const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, todayHealth, aiBudget, topActions } = data
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -79,11 +79,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   const insights = computeInsights(stats, scores, todayHealth)
 
   const moduleScores = [
-    { label: 'Health',   score: scores.health,            color: '#ef4444', to: '/health' },
-    { label: 'Finance',  score: scores.finance,           color: '#22c55e', to: '/finance' },
-    { label: 'Career',   score: scores.career,            color: '#f59e0b', to: '/career' },
-    { label: 'Learning', score: scores.learning,          color: '#a855f7', to: '/learning' },
-    { label: 'Coding',   score: scores.projects ?? 0,     color: '#06b6d4', to: '/coding' },
+    { label: 'Health',   score: scores.health,            color: '#ef4444', to: '/health',   tip: scoreTips.health },
+    { label: 'Finance',  score: scores.finance,           color: '#22c55e', to: '/finance',  tip: scoreTips.finance },
+    { label: 'Career',   score: scores.career,            color: '#f59e0b', to: '/career',   tip: scoreTips.career },
+    { label: 'Learning', score: scores.learning,          color: '#a855f7', to: '/learning', tip: scoreTips.learning },
+    { label: 'Coding',   score: scores.projects ?? 0,     color: '#06b6d4', to: '/coding',   tip: scoreTips.projects },
   ]
 
   const modules = [
@@ -125,8 +125,8 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           <div className="flex-1 w-full">
             <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">Module Scores</p>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-              {moduleScores.map(({ label, score, color, to }) => (
-                <Link key={to} href={to}
+              {moduleScores.map(({ label, score, color, to, tip }) => (
+                <Link key={to} href={to} title={tip}
                   className="flex flex-col items-center gap-1 p-1.5 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 transition-colors group">
                   <div className="relative">
                     <MiniRing score={score} color={color} />
@@ -151,7 +151,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
       {/* Today's Focus + Insights side by side — both are short scannable lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Today's Focus" action={<Target size={13} className="text-accent" />}>
+        <Card title="Today's Focus" padding="p-3.5" action={<Target size={13} className="text-accent" />}>
           {topActions.length > 0 ? (
             <ul className="space-y-0.5">
               {topActions.map((action, i) => (

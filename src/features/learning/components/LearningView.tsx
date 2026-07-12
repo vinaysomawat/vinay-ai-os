@@ -122,7 +122,32 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
 
   return (
     <div className="space-y-5">
-      <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`} />
+      {/* AI Advisor + Daily Plan side by side — each collapsed by default, so paired horizontally instead of stacked to halve the vertical footprint */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`} />
+
+        <div className="border border-surface-3 rounded-xl overflow-hidden">
+          <button onClick={handlePlan} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-accent" />
+              <span className="text-sm font-medium text-slate-300">AI Daily Study Plan</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {planLoading && <span className="text-xs text-slate-500">Generating...</span>}
+              <ChevronDown size={14} className={`text-slate-500 transition-transform ${showPlan ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+          {showPlan && (
+            <div className="px-4 py-4 bg-surface-1 border-t border-surface-3">
+              {planLoading
+                ? <div className="space-y-2">{[85, 70, 90, 60, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>
+                : plan
+                  ? <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{plan}</p>
+                  : null}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -145,30 +170,6 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
           </div>
           <span className="text-xs text-slate-500 mt-1">{weekMinutes}m this week</span>
         </div>
-      </div>
-
-      {/* AI Daily Study Plan */}
-      <div className="border border-surface-3 rounded-xl overflow-hidden">
-        <button onClick={handlePlan} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <span className="text-sm font-medium text-slate-300">AI Daily Study Plan</span>
-            <span className="text-xs text-slate-600">What to focus on today</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {planLoading && <span className="text-xs text-slate-500">Generating...</span>}
-            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showPlan ? 'rotate-180' : ''}`} />
-          </div>
-        </button>
-        {showPlan && (
-          <div className="px-4 py-4 bg-surface-1 border-t border-surface-3">
-            {planLoading
-              ? <div className="space-y-2">{[85, 70, 90, 60, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>
-              : plan
-                ? <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{plan}</p>
-                : null}
-          </div>
-        )}
       </div>
 
       {/* Revision nudge — rule-based, not AI: completed resources with no study activity in 14+ days */}

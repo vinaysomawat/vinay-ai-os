@@ -1,6 +1,9 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getResourcesNeedingRevision } from '@/features/learning/calculations'
+import { getTodayAssignmentRows } from '@/features/coding/daily-core'
+import type { Resource, StudyLog } from '@/features/learning/types'
 
 export interface TopAction {
   emoji: string
@@ -15,13 +18,15 @@ interface TopActionInput {
   monthSpend: number
   monthBudget: number
   todayMetric: Record<string, unknown> | null
+  resourcesNeedingRevision: number
+  codingQuestionPending: boolean
 }
 
 // Deterministic ranking — no AI call. Per Product Principles (CLAUDE.md):
 // "reduce decisions, don't just surface data" — surface the 3 highest-impact
 // actions instead of a wall of stat cards.
 function computeTopActions(input: TopActionInput): TopAction[] {
-  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric } = input
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending } = input
   const candidates: (TopAction & { score: number })[] = []
 
   const overdue = pendingTasks.filter(t => t.due_date && t.due_date < today)
@@ -57,9 +62,20 @@ function computeTopActions(input: TopActionInput): TopAction[] {
     })
   }
 
+  if (codingQuestionPending) {
+    candidates.push({ score: 65, emoji: '💻', href: '/coding', text: 'Today\'s coding question is still open' })
+  }
+
   const metricsLoggedToday = !!todayMetric && ['weight_kg', 'calories', 'steps'].some(k => todayMetric[k] != null)
   if (!metricsLoggedToday) {
     candidates.push({ score: 50, emoji: '📊', href: '/health', text: 'No health metrics logged today' })
+  }
+
+  if (resourcesNeedingRevision > 0) {
+    candidates.push({
+      score: 45, emoji: '📚', href: '/learning',
+      text: `${resourcesNeedingRevision} resource${resourcesNeedingRevision > 1 ? 's' : ''} completed but not revised in 14+ days`,
+    })
   }
 
   return candidates.sort((a, b) => b.score - a.score).slice(0, 3).map(c => ({ emoji: c.emoji, text: c.text, href: c.href }))
@@ -75,6 +91,7 @@ export async function getDashboardData() {
   if (!user) return {
     pendingTasks: [], recentApplications: [], botActivity: [],
     scores: { health: 0, finance: 50, career: 0, learning: 0, projects: 0, life: 0 },
+    scoreTips: { health: '', finance: '', career: '', learning: '', projects: '' },
     todayHealth: null,
     scoreHistory: [] as { date: string; life: number; health: number; finance: number; career: number; learning: number; projects: number }[],
     gamification: { xp: 0, level: 1, xpProgress: 0, streak: 0, badges: [] as string[] },
@@ -83,18 +100,20 @@ export async function getDashboardData() {
     topActions: [] as TopAction[],
   }
 
+  const studyLogsSince = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0]
+
   const [
     tasksRes, appsRes, workoutsRes,
     expensesRes, budgetsRes, resourcesRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
-    aiUsageMonthRes,
+    aiUsageMonthRes, studyLogsRes, codingTodayRows,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', today),
     supabase.from('expenses').select('amount').eq('user_id', user.id).gte('date', monthStart),
     supabase.from('budgets').select('amount').eq('user_id', user.id).eq('month', today.slice(0, 7)),
-    supabase.from('resources').select('status').eq('user_id', user.id),
+    supabase.from('resources').select('id, status').eq('user_id', user.id),
     supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('telegram_logs').select('module, message, response, created_at').order('created_at', { ascending: false }).limit(50),
     supabase.from('health_metrics').select('*').eq('user_id', user.id).eq('date', today).single(),
@@ -102,6 +121,8 @@ export async function getDashboardData() {
     supabase.from('skills').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('interview_qa').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('ai_usage_logs').select('estimated_cost_usd, cache_hit, created_at').eq('user_id', user.id).gte('created_at', `${monthStart}T00:00:00.000Z`),
+    supabase.from('study_logs').select('id, date, resource_id').eq('user_id', user.id).gte('date', studyLogsSince),
+    getTodayAssignmentRows(supabase, user.id),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -168,6 +189,52 @@ export async function getDashboardData() {
     } catch { /* GitHub unavailable — skip */ }
   }
   const projectsScore = Math.min(100, githubCommits * 5)
+
+  // --- Score tips ---
+  // Deterministic, no AI call — each tip names the single highest-point-value
+  // gap for that module, picked the same way computeTopActions ranks by score.
+  const healthDeficit = workoutScore === 0 ? 60 : 0
+  const metricsDeficit = 40 - (metricsLogged / 6) * 40
+  const healthTip = healthDeficit > 0 && healthDeficit >= metricsDeficit
+    ? 'No workout logged today — worth 60% of this score'
+    : metricsDeficit > 0
+      ? `Log ${6 - metricsLogged} more metric${6 - metricsLogged > 1 ? 's' : ''} today (weight, calories, protein, sleep, steps, water)`
+      : 'Fully logged today — keep it up'
+
+  const financeTip = monthBudget === 0
+    ? 'Set a monthly budget for a real score instead of the neutral default'
+    : monthSpend / monthBudget >= 1
+      ? 'Over budget this month — pull back spending to recover'
+      : monthSpend / monthBudget >= 0.9
+        ? 'Close to your budget limit — slow down for the rest of the month'
+        : 'Under budget — nothing to do here'
+
+  const careerDeficits: [number, string][] = [
+    [profileFilled ? 0 : 25, 'Fill in your career profile (current + target role) — worth 25 points'],
+    [25 - Math.min(25, skillCount * 3), 'Add a few more skills to the tracker'],
+    [30 - Math.min(30, activeApps * 10), 'No active applications — apply somewhere to earn up to 30 points'],
+    [qaCount > 0 ? 0 : 20, 'Add at least one interview Q&A — worth 20 points'],
+  ]
+  const topCareerDeficit = careerDeficits.reduce((a, b) => (b[0] > a[0] ? b : a))
+  const careerTip = topCareerDeficit[0] > 0 ? topCareerDeficit[1] : 'Career basics maxed — check the AI Mentor for what\'s next'
+
+  const learningTip = resources.length === 0
+    ? 'Add a learning resource to start tracking progress'
+    : learningInProgress > 0
+      ? 'Finish an in-progress resource for the biggest jump'
+      : learningCompleted < resources.length
+        ? 'Start one of your queued resources to begin earning credit'
+        : 'All resources completed — add a new one to keep growing this score'
+
+  const projectsTip = !githubUsername
+    ? 'Set GITHUB_USERNAME to let this score reflect your activity'
+    : githubCommits === 0
+      ? 'No GitHub pushes in the last 30 days — commit something'
+      : githubCommits < 20
+        ? `${20 - githubCommits} more pushes this month would max this score`
+        : 'Maxed out — consistent shipping'
+
+  const scoreTips = { health: healthTip, finance: financeTip, career: careerTip, learning: learningTip, projects: projectsTip }
 
   // Life Score: weighted aggregate
   const lifeScore = Math.round(
@@ -247,8 +314,13 @@ export async function getDashboardData() {
     cacheHitRateMonth: aiUsageMonth.length ? Math.round((aiUsageMonth.filter(r => r.cache_hit).length / aiUsageMonth.length) * 100) : 0,
   }
 
+  const studyLogs = (studyLogsRes.data ?? []) as StudyLog[]
+  const resourcesNeedingRevision = getResourcesNeedingRevision(resources as Resource[], studyLogs).length
+  const codingQuestionPending = codingTodayRows.length > 0 && codingTodayRows.some(r => !r.completed)
+
   const topActions = computeTopActions({
     today, pendingTasks, applications, monthSpend, monthBudget, todayMetric,
+    resourcesNeedingRevision, codingQuestionPending,
   })
 
   // Upsert XP record
@@ -265,6 +337,7 @@ export async function getDashboardData() {
     scoreHistory,
     gamification: { xp: totalXP, level: xpLevel, xpProgress, streak, badges },
     scores: { health: healthScore, finance: financeScore, career: careerScore, learning: learningScore, projects: projectsScore, life: lifeScore },
+    scoreTips,
     stats: {
       pendingTaskCount: pendingTasks.length,
       activeApplications: activeApps,
