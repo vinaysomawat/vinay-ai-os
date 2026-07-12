@@ -46,7 +46,7 @@ export default function HealthProfileForm({ profile, onClose, onSaved }: Props) 
           <h2 className="text-base font-semibold text-slate-200">Health Profile</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
         </div>
-        <p className="text-xs text-slate-500 mb-4">One-time setup — used to calculate your maintenance calorie targets, macros, and health score. Goal is overall fitness across nutrition, activity, and sleep, not a target weight. Your current weight comes from today&apos;s metric log.</p>
+        <p className="text-xs text-slate-500 mb-4">One-time setup — used to calculate your daily calorie/macro targets and health score. If your BMI is above normal, targets carry a gradual deficit toward a normal BMI (auto-computed from height, no target weight needed); otherwise they're maintenance. Your current weight comes from today&apos;s metric log.</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">

@@ -16,11 +16,17 @@ const METRICS: { field: MetricField; label: string; emoji: string; unit: string;
   { field: 'weight_kg',      label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
   { field: 'calories',       label: 'Calories', emoji: '🔥',  unit: 'kcal' },
   { field: 'protein_g',      label: 'Protein',  emoji: '🥩',  unit: 'g' },
-  { field: 'sleep_hours',    label: 'Sleep',    emoji: '😴',  unit: 'hrs',  decimals: 1 },
   { field: 'steps',          label: 'Steps',    emoji: '👟',  unit: 'steps' },
-  { field: 'water_ml',       label: 'Water',    emoji: '💧',  unit: 'ml' },
-  { field: 'recovery_score', label: 'Recovery', emoji: '🔋',  unit: '/5' },
 ]
+
+function StatTile({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div>
+      <p className="text-lg font-bold text-white">{value}</p>
+      <p className="text-xs text-slate-500">{label}</p>
+    </div>
+  )
+}
 
 function getLast7Days() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -48,28 +54,29 @@ function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekA
   }
 
   return (
-    <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col gap-2 hover:border-surface-3/80 transition-colors">
-      <div className="flex items-center justify-between">
-        <span className="text-lg">{emoji}</span>
-        {saved && <span className="text-xs text-green-400">✓</span>}
+    <div className="bg-surface-1 border border-surface-3 rounded-lg p-2.5 hover:border-surface-3/80 transition-colors">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-slate-500 uppercase tracking-wider flex items-center gap-1 truncate">
+          <span className="text-sm shrink-0">{emoji}</span>{label}
+        </span>
+        {saved && <span className="text-xs text-green-400 shrink-0">✓</span>}
       </div>
-      <div>
-        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</p>
-        <div className="flex items-baseline gap-1">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
-            onBlur={handleSave}
-            placeholder="—"
-            disabled={saving}
-            className="text-xl font-bold text-white bg-transparent outline-none w-full placeholder-slate-700"
-          />
-          <span className="text-xs text-slate-600 shrink-0">{unit}</span>
-        </div>
+      <div className="flex items-baseline gap-1">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+          onBlur={handleSave}
+          placeholder="—"
+          disabled={saving}
+          className="text-lg font-bold text-white bg-transparent outline-none w-full placeholder-slate-700"
+        />
+        <span className="text-xs text-slate-600 shrink-0">{unit}</span>
       </div>
-      <p className="text-xs text-slate-700">7d avg: {weekAvg !== null ? weekAvg.toFixed(decimals) : '—'}</p>
-      {leftText && <p className="text-xs text-accent font-medium">{leftText}</p>}
+      <div className="flex items-center justify-between gap-1 mt-0.5">
+        <span className="text-xs text-slate-700 shrink-0">avg {weekAvg !== null ? weekAvg.toFixed(decimals) : '—'}</span>
+        {leftText && <span className="text-xs text-accent font-medium truncate">{leftText}</span>}
+      </div>
     </div>
   )
 }
@@ -160,23 +167,22 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
     const value = todayMetric?.[field]
     if (field === 'calories') return `${Math.max(0, dailyTargets.dailyCalorieTarget - (value ?? 0))} kcal left of ${dailyTargets.dailyCalorieTarget}`
     if (field === 'protein_g') return `${Math.max(0, dailyTargets.proteinTargetG - (value ?? 0))}g left of ${dailyTargets.proteinTargetG}g`
-    if (field === 'water_ml') return `${Math.max(0, 3000 - (value ?? 0))}ml left of 3000ml`
     if (field === 'steps') return `${Math.max(0, 10000 - (value ?? 0))} steps left of 10,000`
     return null
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* AI Advisor + Today's Plan side by side — both collapsed by default, paired horizontally to halve the vertical footprint */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Goal: overall fitness across nutrition, activity, and sleep — not a target weight.`} />
+        <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${todayMetric?.steps ?? 'not logged'}. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Goal: get fit — gradual deficit toward a normal BMI.${dailyTargets ? ` Current BMI ${dailyTargets.bmi} (normal ≤24.9, ~${dailyTargets.normalBmiWeightKg}kg at his height), pace ~${dailyTargets.weeklyLossKg}kg/week.` : ''}`} />
         {profile && dailyTargets && healthScore && (
           <TodaysPlanCard profile={profile} plan={dailyTargets} todayMetric={todayMetric} score={healthScore} today={today} />
         )}
       </div>
 
-      {/* Health profile setup / edit */}
-      {!profile ? (
+      {/* Health profile setup — only shown before a profile exists; once it does, the edit link lives on the Health Score card */}
+      {!profile && (
         <div className="bg-gradient-to-br from-accent/10 to-transparent border border-accent/30 rounded-xl p-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-slate-200">Set up your Health Profile</p>
@@ -186,7 +192,8 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
             Set up
           </button>
         </div>
-      ) : (
+      )}
+      {profile && !(dailyTargets && healthScore) && (
         <div className="flex justify-end">
           <button onClick={() => setShowProfileForm(true)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
             <Settings2 size={12} /> Edit health profile
@@ -204,52 +211,31 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
 
       {/* Health Score */}
       {profile && dailyTargets && healthScore && (
-        <>
-          <HealthScoreHero score={healthScore} />
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div>
-              <p className="text-lg font-bold text-white">{dailyTargets.dailyCalorieTarget}</p>
-              <p className="text-xs text-slate-500">kcal target</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-white">{dailyTargets.proteinTargetG}g</p>
-              <p className="text-xs text-slate-500">protein target</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-white">{dailyTargets.carbsG}g</p>
-              <p className="text-xs text-slate-500">carbs target</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-white">{dailyTargets.fatG}g</p>
-              <p className="text-xs text-slate-500">fat target</p>
-            </div>
-          </div>
-        </>
+        <HealthScoreHero score={healthScore} onEditProfile={() => setShowProfileForm(true)} />
       )}
+
+      {/* Stats — current weight/workouts always shown, targets/BMI added once a plan can be computed */}
+      <div className="bg-surface-1 border border-surface-3 rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+        <StatTile value={todayMetric?.weight_kg ?? '—'} label="Weight (kg)" />
+        <StatTile value={workouts.length} label="Workouts today" />
+        {dailyTargets && <StatTile value={dailyTargets.bmi} label={`BMI (normal ≤24.9, ~${dailyTargets.normalBmiWeightKg}kg)`} />}
+        {dailyTargets && <StatTile value={dailyTargets.dailyCalorieTarget} label="kcal target" />}
+        {dailyTargets && <StatTile value={`${dailyTargets.proteinTargetG}g`} label="protein target" />}
+        {dailyTargets && <StatTile value={`${dailyTargets.carbsG}g`} label="carbs target" />}
+        {dailyTargets && <StatTile value={`${dailyTargets.fatG}g`} label="fat target" />}
+      </div>
 
       {profile && !dailyTargets && (
         <p className="text-xs text-slate-600 -mt-2">Log today&apos;s weight below to unlock your calorie targets and Health Score.</p>
       )}
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
-          <span className="text-2xl font-bold text-slate-200">{todayMetric?.weight_kg ?? '—'}</span>
-          <span className="text-xs text-slate-500 mt-1">Weight (kg)</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
-          <span className="text-2xl font-bold text-slate-200">{workouts.length}</span>
-          <span className="text-xs text-slate-500 mt-1">Workouts today</span>
-        </div>
-      </div>
-
       {/* Today's metrics */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-slate-300">Today&apos;s Metrics</h3>
           <span className="text-xs text-slate-600">Press Enter to save</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {METRICS.map(m => (
             <MetricCard
               key={m.field}
@@ -265,8 +251,8 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
       </div>
 
       {/* Workouts */}
-      <Card title="Workouts" action={<span className="text-xs text-slate-500">{workouts.length} today</span>}>
-        <div className="flex gap-2 mb-4">
+      <Card title="Workouts" padding="p-3.5" action={<span className="text-xs text-slate-500">{workouts.length} today</span>}>
+        <div className="flex gap-2 mb-3">
           <select
             value={workoutType}
             onChange={e => setWorkoutType(e.target.value)}
@@ -292,11 +278,11 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           </button>
         </div>
         {workouts.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-4">No workouts logged today</p>
+          <p className="text-sm text-slate-600 text-center py-3">No workouts logged today</p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {workouts.map(w => (
-              <li key={w.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+              <li key={w.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
                 <span className="flex-1 text-sm text-slate-200">{w.type}{w.duration_minutes ? ` — ${w.duration_minutes} min` : ''}</span>
                 <button onClick={() => handleDeleteWorkout(w.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                   <Trash2 size={13} />

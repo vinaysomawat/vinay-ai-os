@@ -9,10 +9,20 @@ const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
 }
 
 const MIN_SAFE_CALORIES = 1500
+const KCAL_PER_KG_FAT = 7700
+const NORMAL_BMI_UPPER = 24.9
 
 export function calculateBMI(weightKg: number, heightCm: number): number {
   const heightM = heightCm / 100
   return weightKg / (heightM * heightM)
+}
+
+// Upper bound of the "normal" BMI range (18.5–24.9) — the most achievable
+// real target for someone starting overweight/obese, used as the fitness
+// goal weight instead of requiring a manually-entered target weight.
+export function calculateNormalBmiWeight(heightCm: number): number {
+  const heightM = heightCm / 100
+  return NORMAL_BMI_UPPER * heightM * heightM
 }
 
 export function calculateBMR(weightKg: number, heightCm: number, age: number, gender: Gender): number {
@@ -29,17 +39,40 @@ export interface DailyTargets {
   proteinTargetG: number
   carbsG: number
   fatG: number
+  bmi: number
+  normalBmiWeightKg: number
+  weeklyLossKg: number
 }
 
-// Maintenance-based targets — the goal is overall fitness across all health
-// metrics, not a weight-loss deficit toward a target weight.
-export function calculateDailyTargets(currentWeightKg: number, tdee: number): DailyTargets {
-  const dailyCalorieTarget = Math.max(MIN_SAFE_CALORIES, Math.round(tdee))
-  const proteinTargetG = Math.round(currentWeightKg * 2.0)
+// Fitness-oriented targets, not pure maintenance: if current weight puts BMI
+// above the normal range (18.5–24.9), calorie target is a modest deficit
+// toward the upper-normal-BMI weight (auto-computed from height — no manual
+// target weight or deadline needed). Once BMI is back in the normal range,
+// this naturally becomes a maintenance target.
+export function calculateDailyTargets(currentWeightKg: number, heightCm: number, tdee: number): DailyTargets {
+  const bmi = calculateBMI(currentWeightKg, heightCm)
+  const normalBmiWeightKg = calculateNormalBmiWeight(heightCm)
+  const weightToLoseKg = Math.max(0, currentWeightKg - normalBmiWeightKg)
+
+  // Sustainable pace: 0.4-1kg/week, scaled to how much is left to lose.
+  const weeklyLossKg = weightToLoseKg > 0 ? Math.min(1, Math.max(0.4, weightToLoseKg * 0.01 * 7)) : 0
+  const dailyDeficit = (weeklyLossKg * KCAL_PER_KG_FAT) / 7
+  const dailyCalorieTarget = Math.max(MIN_SAFE_CALORIES, Math.round(tdee - dailyDeficit))
+
+  // Protein is based on the target (normal-BMI) weight while cutting, not
+  // current scale weight — 2g/kg of an overweight starting weight overshoots
+  // real need; standard fat-loss guidance anchors protein to lean/goal weight.
+  const proteinBaseWeightKg = weightToLoseKg > 0 ? normalBmiWeightKg : currentWeightKg
+  const proteinTargetG = Math.round(proteinBaseWeightKg * 2.0)
   const fatG = Math.round((dailyCalorieTarget * 0.25) / 9)
   const carbsG = Math.max(0, Math.round((dailyCalorieTarget - proteinTargetG * 4 - fatG * 9) / 4))
 
-  return { dailyCalorieTarget, proteinTargetG, carbsG, fatG }
+  return {
+    dailyCalorieTarget, proteinTargetG, carbsG, fatG,
+    bmi: Math.round(bmi * 10) / 10,
+    normalBmiWeightKg: Math.round(normalBmiWeightKg * 10) / 10,
+    weeklyLossKg: Math.round(weeklyLossKg * 100) / 100,
+  }
 }
 
 export interface SubScore {
@@ -50,7 +83,6 @@ export interface SubScore {
 export interface HealthScoreBreakdown {
   overall: number
   nutrition: SubScore
-  sleep: SubScore
   activity: SubScore
 }
 
@@ -83,18 +115,6 @@ export function calculateHealthScore(
         : 'On track with today\'s nutrition targets'
   }
 
-  // Sleep
-  let sleepScore: number
-  let sleepReason: string
-  if (todayMetric?.sleep_hours == null) {
-    sleepScore = 0
-    sleepReason = 'Sleep not logged today'
-  } else {
-    const h = todayMetric.sleep_hours
-    sleepScore = h >= 7 && h <= 9 ? 100 : clamp(100 - Math.abs(h - 8) * 20)
-    sleepReason = h < 7 ? `${h}h is below the 7-9h target` : h > 9 ? `${h}h is above the 7-9h target` : 'Within the 7-9h target range'
-  }
-
   // Activity
   let activityScore: number
   let activityReason: string
@@ -111,13 +131,12 @@ export function calculateHealthScore(
   }
 
   const overall = Math.round(
-    nutritionScore * 0.4 + activityScore * 0.3 + sleepScore * 0.3
+    nutritionScore * 0.6 + activityScore * 0.4
   )
 
   return {
     overall,
     nutrition: { score: nutritionScore, reason: nutritionReason },
-    sleep: { score: sleepScore, reason: sleepReason },
     activity: { score: activityScore, reason: activityReason },
   }
 }
@@ -146,6 +165,7 @@ export function computeHealthPlan(
 
   const dailyTargets = calculateDailyTargets(
     latestWeight!,
+    profile!.height_cm!,
     calculateTDEE(calculateBMR(latestWeight!, profile!.height_cm!, profile!.age!, profile!.gender!), profile!.activity_level!),
   )
 

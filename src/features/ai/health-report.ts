@@ -8,7 +8,6 @@ export async function getHealthReport(metrics: HealthMetric[]): Promise<string> 
   if (metrics.length === 0) return 'No health data yet. Start logging your metrics daily and I can analyse your trends.'
 
   const withWeight  = metrics.filter(m => m.weight_kg !== null)
-  const withSleep   = metrics.filter(m => m.sleep_hours !== null)
   const withCalories = metrics.filter(m => m.calories !== null)
   const withProtein  = metrics.filter(m => m.protein_g !== null)
   const withSteps    = metrics.filter(m => m.steps !== null)
@@ -24,11 +23,9 @@ export async function getHealthReport(metrics: HealthMetric[]): Promise<string> 
 Weight:  ${withWeight.map(m => `${m.date}: ${m.weight_kg}kg`).join(', ') || 'not logged'}
 ${weightTrend ? `Weight change: ${Number(weightTrend) > 0 ? '+' : ''}${weightTrend}kg over the period` : ''}
 
-Sleep:    avg ${avg(withSleep.map(m => m.sleep_hours!))} hrs/night
 Calories: avg ${avg(withCalories.map(m => m.calories!))} kcal/day
 Protein:  avg ${avg(withProtein.map(m => m.protein_g!))} g/day
 Steps:    avg ${avg(withSteps.map(m => m.steps!))} steps/day
-Water:    avg ${metrics.filter(m=>m.water_ml).length ? avg(metrics.filter(m=>m.water_ml).map(m=>m.water_ml!)) : 'N/A'} ml/day
 
 Write a weekly health report with:
 1. A one-line overall summary (include a score /10)
@@ -50,20 +47,23 @@ export async function getDailyHealthPlan(
 ): Promise<string> {
   const caloriesLeft = plan.dailyCalorieTarget - (todayMetric?.calories ?? 0)
   const proteinLeft = plan.proteinTargetG - (todayMetric?.protein_g ?? 0)
-  const waterLeft = 3000 - (todayMetric?.water_ml ?? 0)
   const stepsLogged = todayMetric?.steps ?? 0
 
-  const prompt = `Vinay's daily health plan for today. His goal: overall fitness — staying balanced across nutrition, activity, and sleep, not chasing a specific weight target.
+  const bmiNote = plan.weeklyLossKg > 0
+    ? `His BMI is ${plan.bmi} (normal range tops out at 24.9, ~${plan.normalBmiWeightKg}kg at his height) — today's targets carry a modest ~${plan.weeklyLossKg}kg/week deficit toward that, not a crash diet.`
+    : `His BMI is ${plan.bmi}, already in the normal range — today's targets are maintenance, not a deficit.`
 
-Today's maintenance targets: ${plan.dailyCalorieTarget} kcal, ${plan.proteinTargetG}g protein, ${plan.carbsG}g carbs, ${plan.fatG}g fat.
+  const prompt = `Vinay's daily health plan for today. His goal: get fit — a gradual, sustainable calorie deficit toward a normal BMI, not a crash diet or an arbitrary weight-loss deadline. ${bmiNote}
 
-Logged so far today: calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${stepsLogged}, water=${todayMetric?.water_ml ?? 'not logged'}ml, sleep last night=${todayMetric?.sleep_hours ?? 'not logged'}h.
+Today's targets: ${plan.dailyCalorieTarget} kcal, ${plan.proteinTargetG}g protein, ${plan.carbsG}g carbs, ${plan.fatG}g fat.
 
-Remaining today: ${caloriesLeft > 0 ? `${caloriesLeft} kcal left` : 'calorie budget used up'}, ${proteinLeft > 0 ? `${proteinLeft}g protein left` : 'protein target hit'}, ${waterLeft > 0 ? `${waterLeft}ml water left` : 'water target hit'}.
+Logged so far today: calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${stepsLogged}.
 
-Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score} — ${score.nutrition.reason}; Sleep ${score.sleep.score} — ${score.sleep.reason}; Activity ${score.activity.score} — ${score.activity.reason}).
+Remaining today: ${caloriesLeft > 0 ? `${caloriesLeft} kcal left` : 'calorie budget used up'}, ${proteinLeft > 0 ? `${proteinLeft}g protein left` : 'protein target hit'}.
 
-Write today's action plan as a short checklist (6-8 lines, each starting with an emoji), covering what's left to eat, water, steps/workout, and sleep timing. End with one sentence tying it back to overall fitness/consistency, not weight loss. Be specific to the numbers above — no generic advice. Plain text only — no markdown (no **, no #, no bullet dashes). Keep it under 150 words.`
+Health Score right now: ${score.overall}/100 (Nutrition ${score.nutrition.score} — ${score.nutrition.reason}; Activity ${score.activity.score} — ${score.activity.reason}).
+
+Write today's action plan as a short checklist (5-7 lines, each starting with an emoji), covering what's left to eat and steps/workout. End with one sentence tying it back to steady progress toward a normal BMI. Be specific to the numbers above — no generic advice. Plain text only — no markdown (no **, no #, no bullet dashes). Keep it under 150 words.`
 
   return askAI('health_daily_plan', prompt, "You are Vinay's personal fitness and nutrition coach. Be specific, data-driven, and direct. Reference his actual numbers, not generic tips.")
 }
