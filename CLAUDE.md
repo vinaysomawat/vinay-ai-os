@@ -4,15 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vinay AI OS is a personal AI Operating System — a Next.js 15 web app backed by Supabase and deployed to Vercel. It covers 7 life domains:
+Vinay AI OS is a personal AI Operating System — a Next.js 15 web app backed by Supabase and deployed to Vercel. It covers Dashboard (Life Score + Today's Focus), Planner, Career, Finance, Health, Learning, Coding, Documents, and Settings, all reachable from a per-module Telegram bot.
 
-- **Planner** — tasks with priority, area, due date
-- **Career** — job application pipeline (applied → offer/rejected)
-- **Finance** — expense tracking + per-category budgets
-- **Health** — daily habit tracker with 7-day streak grid
-- **Learning** — resource tracker (courses, books, videos, articles, podcasts)
-- **Coding** — project tracker with tech stack tags
-- **Documents** — full-text knowledge base with AI Q&A
+**For the full, current, module-by-module spec (exact fields, formulas, AI features, Telegram capabilities, cron jobs, complete DB schema) — read `README.md`, not this section.** This file covers workflow/conventions only; README.md is the single source of truth for what the app does, and per the checklist below it's kept current with every functional change.
 
 ## Stack
 
@@ -47,6 +41,14 @@ AI_MONTHLY_BUDGET_USD=       # optional, default 50 — AI Gateway monthly spend
 ```
 
 This is a non-exhaustive list scoped to the AI Gateway — see `.env.local` for the full set (Telegram bot tokens, `GROQ_API_KEY`, `CRON_SECRET`, `GITHUB_USERNAME`/`GITHUB_TOKEN`, etc.), which this file doesn't fully document yet.
+
+## Post-task checklist: keep README.md current
+
+`README.md` is the canonical spec of this app — written so that pasting the whole file into a fresh AI chat gives that AI 100% understanding of what the app does and how it's built, with no other context needed (module-by-module behavior, exact fields, formulas, AI features, Telegram capabilities, cron jobs, full DB schema).
+
+Before ending any task that changed architecture, database schema, a module's fields/behavior, an AI feature, a Telegram bot capability, a cron job, or navigation structure, update the corresponding section(s) of `README.md` to match. Treat this as a mandatory last step, same tier as running `npm run build` — not optional cleanup, and not something to batch up and do "later." A change that isn't reflected in README.md is not finished.
+
+Pure UI polish (spacing, colors, copy tweaks) that doesn't change what a section *does* doesn't need a README update.
 
 ## Product Principles
 
@@ -110,16 +112,6 @@ This project is Vinay's personal execution system — not a CRUD app, not a dash
 
 ## Database Tables
 
-All tables have `user_id uuid references auth.users` and 4 RLS policies (select/insert/update/delete scoped to `auth.uid()`).
+All tables have `user_id uuid references auth.users` and 4 RLS policies (select/insert/update/delete scoped to `auth.uid()`), unless noted otherwise in a table's migration.
 
-| Table | Key columns |
-|---|---|
-| `tasks` | text, done, priority, area, due_date |
-| `applications` | company, role, status, salary_range, location, url, notes, applied_at |
-| `expenses` | amount, category, description, date |
-| `budgets` | category, amount, month (unique per user+category+month) |
-| `habits` | name, emoji |
-| `habit_logs` | habit_id, logged_date (unique per habit+date) |
-| `resources` | title, type, url, category, status, progress, notes |
-| `projects` | name, description, status, stack (text[]), github_url, live_url |
-| `documents` | title, content, tags (text[]), updated_at |
+**Full current table list with key columns lives in README.md's Database section** — kept current per the checklist above. Don't maintain a second copy here; it drifts (this is exactly what happened before this note was added).

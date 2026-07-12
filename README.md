@@ -1,8 +1,8 @@
 # Vinay AI OS
 
-A personal, single-user AI Operating System: one Next.js app that tracks tasks, career, money, health, learning, coding practice, and a personal knowledge base — with Claude generating insight in every module, a per-module Telegram bot for hands-free logging (text or voice), scheduled proactive nudges, and a gamified "Life Score" that rolls all of it into one daily number.
+A personal, single-user AI Operating System: one Next.js app that tracks tasks, career, money, health, learning, coding practice, and a personal knowledge base — with Claude generating insight in every module, a per-module Telegram bot for hands-free logging (text, voice, or photo), scheduled proactive nudges, and a gamified "Life Score" that rolls all of it into one daily number.
 
-This document describes exactly what the app does today, module by module, field by field, so it can be used as a spec for improvement ideas.
+This document describes exactly what the app does today, module by module, field by field, formula by formula, so it can be pasted into a fresh AI chat and give that AI complete understanding of the system with no other context needed. It is kept current with every functional change (see `CLAUDE.md`'s post-task checklist).
 
 ---
 
@@ -12,142 +12,173 @@ The home screen. Server-computed on every load (`src/features/dashboard/actions.
 
 - **Life Score (0–100)** — a weighted daily aggregate:
   `health×0.25 + finance×0.20 + career×0.20 + learning×0.20 + projects×0.15`
-  - **Health score**: `(habits done today / total habits) × 60` + `(metrics logged today out of 6 fields / 6) × 40`
-  - **Finance score**: 50 if no budget set; if a budget exists, scored on spend-to-budget ratio (≤70% → 100, ≤90% → 85, ≤100% → 70, ≤120% → 45, else 20); 60 if zero spend logged
-  - **Career score**: profile filled (+25) + `min(25, skills×3)` + `min(30, active applications×10)` + interview-QA bank non-empty (+20)
-  - **Learning score**: `(completed + in-progress×0.5) / total resources × 100`
-  - **Projects score**: `active×20 + completed×15 + min(25, GitHub push events in last 30 days × 2)` (GitHub is optional — only counted if `GITHUB_USERNAME`/`GITHUB_TOKEN` are set)
-  - Every dashboard load **upserts today's row** into `life_score_logs` (one row per user per day), which is what powers history/trends and the cron digests
-- **Gamification**: total XP = sum of every historical daily `life_score`; 9 level thresholds (0 → 10,000 XP); a day-streak counter (consecutive days with a logged score); badges (`🌱 First Step`, `📅 Week Warrior`, `💪 Month Master`, `🔥 7-Day Streak`, `⚡ 30-Day Streak`, `⭐ Half Century`, `🏆 Century Club`, `💎 Elite`, `🎯 1K XP Club`) — all recomputed and upserted into `user_xp` on every load
-- **30-day score history** chart data (per-module + overall) and a **365-day** window used only for streak/XP
-- **Recent bot activity** — last 20 rows from `telegram_logs` (what was said to any Telegram bot and how it was actioned)
-- Quick stats: pending tasks, active applications, habits done/total today, month spend/budget, learning in progress, active/completed projects, GitHub commit count, document count
+  - **Health score**: `(anyWorkoutLoggedToday ? 60 : 0) + (metricsLoggedToday out of 6 fields / 6) × 40`
+  - **Finance score**: if a budget exists this month, scored on spend-to-budget ratio (`≤70%→100, ≤90%→85, ≤100%→70, ≤120%→45, else→20`); `60` if no budget set and zero spend logged; `50` neutral default otherwise
+  - **Career score**: `min(100, (profile filled ? 25 : 0) + min(25, skills×3) + min(30, activeApplications×10) + (interview-QA bank non-empty ? 20 : 0))` — profile is "filled" once both `current_role` and `target_role` are set; active applications = status in `applied`/`screening`/`interview`
+  - **Learning score**: `min(100, round((completed + in-progress×0.5) / total resources × 100))`
+  - **Projects/Coding score**: `min(100, githubPushEventsLast30Days × 5)` — pulled live from `https://api.github.com/users/${GITHUB_USERNAME}/events`, cached 1hr; entirely GitHub-activity-based now (the old manual Projects tracker was removed — see §7). Silently `0` if `GITHUB_USERNAME` isn't set.
+  - Every dashboard load **upserts today's row** into `life_score_logs` (one row per user per day, all 5 sub-scores + the combined score)
+- **Gamification (computed, not currently displayed)**: total XP = sum of `life_score` over the trailing 365 days; 9 level thresholds `[0,200,500,1000,2000,3500,5000,7500,10000]`; a day-streak counter; 9 badges (`🌱 First Step`, `📅 Week Warrior`, `💪 Month Master`, `🔥 7-Day Streak`, `⚡ 30-Day Streak`, `⭐ Half Century`, `🏆 Century Club`, `💎 Elite`, `🎯 1K XP Club`) — all still recomputed and upserted into `user_xp` on every load, and the 30-day per-module score history is still fetched, but **neither is rendered in the UI** (the Level/XP card and score-history chart were removed from `DashboardView.tsx`; the underlying data pipeline was left running rather than ripped out).
+- **Today's Focus card** — deterministic ranking (no AI), top 3 of these candidates by score: overdue tasks (100, 🔴), interview-stage applications (90, 🎯), over-budget this month (80, 💸) or ≥90% of budget used (55, 💸), high-priority non-overdue tasks (70, ⚡), no health metric logged today (50, 📊). Each links to its module.
+- **Insights card** (client-computed, sits beside Today's Focus) — up to 5 deterministic one-liners in priority order: budget remaining/over, low sleep last night (<7h), active-application count, pending-task count, in-progress learning count, a nudge to log steps/water if Health score is low.
+- **Recent bot activity** — last 50 rows from `telegram_logs`, rendered as compact single-line rows (emoji + module + user message + first line of bot reply + relative time), paginated client-side 10 at a time; header shows today's/month's AI spend (`$0.0047`-style 4-decimal formatting for sub-cent amounts) and a cache-hit-rate tooltip.
+- **Module Scores** — 5 mini progress rings (Health/Finance/Career/Learning/Coding) plus a separate 7-tile Modules grid (Planner, Career, Health, Finance, Learning, Coding, Documents), each with a one-line live stat and a link out.
+- **Quick Add** — floating "+" button for fast Task / Expense / Metric entry without leaving the dashboard.
+- Realtime refresh: subscribes to Supabase Realtime changes on `workouts`, `tasks`, `health_metrics` and debounce-refreshes the page (e.g. after logging via Telegram).
 
 ## 2. Planner (`/planner`)
 
 Simple task list. Fields: `text`, `done`, `priority` (high/medium/low), `area` (free text, defaults "General"), `due_date`, `recurrence` (daily/weekly/monthly or none).
 
-- Add / delete / toggle-done / change priority
-- **Recurring tasks**: completing a task with a `recurrence` set auto-creates the next open instance with the same text/priority/area before marking the current one done
-- **Two-way sync with Coding**: toggling a task also updates the linked row in `coding_daily_questions` if the task was auto-generated by the daily coding-challenge system (see §7), and vice versa
-- **AI smart-sort** (`src/features/ai/smart-sort.ts`): sends all tasks to Claude, asks for a re-ordered ID list by urgency/importance/deadline; falls back to original order if the AI response isn't parseable JSON
-- **AI focus pick**: asks Claude to name the single most important pending task right now with a one-sentence reason
+- Add / delete / toggle-done; no manual priority-edit or sort UI (the old "AI Sort" feature — which was actually deterministic, not AI — was removed entirely per user request; tasks render in creation order, pending then completed)
+- **Recurring tasks**: completing a task with `recurrence` set auto-creates the next open instance with the same text/priority/area before marking the current one done
+- **Two-way sync with Coding and Trending Reading**: toggling a task also mirrors `done`/`completed_at` onto the linked row in `coding_daily_questions` and/or `trending_readings` (matched via `task_id`) — see §7 for the full sync mechanics
+- `ModuleRecommendations` ("AI Planner Advisor") widget at the top of the page
+- No focus/deep-work session tracking exists (added, then removed a few days later per user request — the table and UI are both gone)
 
 ## 3. Career (`/career`)
 
-Four sub-areas sharing one page:
+Five sub-areas sharing one page:
 
-- **Applications** — pipeline: `company`, `role`, `status` (applied → screening → interview → offer/rejected), `salary_range`, `location`, `url`, `notes`, `applied_at`. Add / update status / delete.
+- **Applications** — pipeline: `company`, `role`, `status` (applied → screening → interview → offer/rejected), `salary_range`, `location`, `url`, `notes`, `applied_at`, `resume_version_id` (optional link to which resume was sent). Add / update status / delete.
 - **Career profile** — single row: `current_role`, `current_company`, `current_salary`, `target_role`, `years_experience`, `bio`.
-- **Skills** — `name`, `category` (Frontend/Backend/Testing/DevOps/Architecture/Soft Skills/Other), `level` (beginner→expert). Add / change level / delete.
+- **Resume Versions** — `name`, `content` (pasted text), `url`, `notes`, `is_primary`. Multiple tailored resume variants can be tracked; the first one added is auto-primary; "Set primary" reassigns it. When adding an application, a resume version can be picked from a dropdown (defaults to the primary) and shown inline on that application's row.
+- **Skills** — `name`, `category` (Frontend/Backend/Testing/DevOps/Architecture/Soft Skills/Other), `level` (beginner→expert, click to cycle). Add / delete.
 - **Interview Q&A bank** — `question`, `answer`, `topic` (JS/TS/React/Angular/Node/Playwright/Testing/System Design/Behavioral/General), `difficulty`. Add / edit answer / delete.
-- **AI features**:
-  - `career-coach.ts` — groups applications by status, gives 4–5 tactical next steps referencing specific companies by name
-  - `career-mentor.ts` — a free-form Q&A "mentor" that's fed the full profile + skills-by-category + pipeline snapshot as context (used by an in-app chat, under 250 words, direct verdicts on role-readiness/salary)
-  - `generateInterviewQuestions(role, topic, difficulty)` — Claude generates 5 realistic Q&A pairs as JSON, presumably to seed the QA bank
-  - A second, simpler `getCareerAdvice` also lives in `career-mentor.ts` (status-count summary → 3 next steps) — duplicate of the one in `career-coach.ts`, worth consolidating
+- **Coding streak → Career**: `getCareerData()` pulls the current Coding practice streak (`computeCodingStats` from `daily-core.ts`) and (a) shows a `🔥 {N}-day coding streak — feeds interview readiness` badge on the profile card when `streak > 0`, and (b) folds it into the AI Career Mentor's context string — a concrete (if small) instance of Product Principle 4, "modules should connect."
+- **AI features** (no generic `ModuleRecommendations` widget here — replaced by a dedicated mentor):
+  - `askCareerMentor(question, context)` — free-form Q&A fed the full profile + skills-by-category + pipeline snapshot + coding streak; answers under 250 words with direct verdicts on role-readiness/salary
+  - `generateInterviewQuestions(role, topic, difficulty)` — Claude generates 5 realistic Q&A pairs as JSON, used to bulk-seed the QA bank via an "AI Generate" modal
 
 ## 4. Finance (`/finance`)
 
 The richest module — full personal finance tracking, scoped to the **current calendar month** for expenses/budgets:
 
-- **Expenses** — `amount`, `category` (Food/Transport/Housing/Health/Shopping/Entertainment/Learning/Utilities/Other), `description`, `date`. Add / delete.
+- **Expenses** — `amount`, `category` (Food/Transport/Housing/Health/Shopping/Entertainment/Learning/Utilities/Other), `description`, `date`, optional `recurring_expense_id` (set when auto-posted by the recurring-expense cron). Add / delete.
 - **Budgets** — one amount per category per month (`upsert` on `user_id,category,month`).
-- **Finance profile** — `monthly_salary`, `emergency_fund_months`. Changing salary auto-appends a row to `salary_history` (`amount`, `effective_date`) so raises are tracked over time.
-- **Loans** — `name`, `principal`, `emi`, `interest_rate`, `remaining_months`. Add / delete. Total remaining debt = `Σ emi × remaining_months`.
-- **Investments** — `name`, `type` (mutual_fund/stocks/fd/crypto/other), `invested_amount`, `current_value`, `notes`. Add / update current value / delete. P&L = current − invested.
+- **Finance profile** — `monthly_salary`, `emergency_fund_months`. Changing salary auto-appends a row to `salary_history` (`amount`, `effective_date`, `note`) so raises are tracked over time.
+- **Loans** — `name`, `principal`, `emi`, `interest_rate`, `remaining_months`, all **inline-editable** (EMI/rate/remaining-months can be updated in place without delete+recreate). Total remaining debt = `Σ emi × remaining_months`.
+- **Investments** — `name`, `type` (mutual_fund/stocks/fd/crypto/other), `invested_amount`, `current_value` (both inline-editable — `invested_amount` edits support SIP top-ups), `notes`. P&L = current − invested.
+- **Recurring expenses** — `name`, `amount`, `category`, `day_of_month` (1–28), `active`. A daily cron (§11) auto-posts each active template into `expenses` on its scheduled day, tagging the row `description: "{name} (recurring)"` with `recurring_expense_id` set, idempotently (won't double-post the same month). Pause/resume and delete from the UI.
 - **Financial goals** — `name`, `target_amount`, `current_amount`, `target_date`, `priority`. Add / update progress / delete.
+- **EMI is not double-counted**: `loans.emi` is purely informational (shown only in the "Total Debt" card) and is never added on top of logged expenses — if EMI is paid, it's expected to already appear as a regular (typically "Bills") expense, and spend totals reflect only actual logged `expenses` rows.
 - **Rolling 3-month average expense** — computed on every load from the last 90 days of expenses, used as the "realistic monthly spend" baseline (as opposed to just this month's partial total).
-- **AI advisor** (`finance-advisor.ts`) — free-form Q&A fed the full financial snapshot: salary, EMIs (itemized per loan), 3-month avg spend, free cash/month (`salary − EMIs − avg spend`), portfolio with per-holding P&L, goals with target dates, and emergency-fund target in ₹. Answers under 200 words, numbers-driven, gives clear verdicts on affordability/investment questions.
+- **AI advisor** (`finance-advisor.ts`) — free-form Q&A fed the full financial snapshot: salary, EMIs (itemized per loan), 3-month avg spend, free cash/month (`salary − EMIs − avg spend`), portfolio with per-holding P&L, goals with target dates, and emergency-fund target in ₹. Answers under 200 words, numbers-driven.
 
 ## 5. Health (`/health`)
 
-Two systems layered together: **habits** (streaks) and **metrics + weight-loss coaching**.
+Daily metrics, structured workouts, and weight-loss coaching. **The old habit tracker (with its 7-day streak grid) has been fully removed** — structured Workouts plus the daily metrics already cover what habit-consistency used to feed into the Health Score.
 
-- **Habits** — `name`, `icon`(emoji). Log/unlog per date; a 7-day rolling log window is fetched for the streak grid.
-- **Daily metrics** (`health_metrics`, one upsertable row per user per day) — `weight_kg`, `calories`, `protein_g`, `sleep_hours`, `steps`, `water_ml`, `notes`.
+- **Daily metrics** (`health_metrics`, one upsertable row per user per day) — `weight_kg`, `calories`, `protein_g`, `sleep_hours`, `steps`, `water_ml`, `recovery_score` (1–5 self-rated), `notes`. Each shown as an inline-editable card with a "7d avg."
+- **Workouts** (`workouts` table) — `date`, `type` (Strength/Cardio/Run/Yoga/Sports/Other), `duration_minutes`, `notes`. Log/delete; whether a workout was logged today directly boosts the Activity sub-score.
 - **Health profile** — `age`, `gender`, `height_cm`, `target_weight_kg`, `activity_level` (sedentary→very_active), `workout_days_per_week`, `food_preference`, `goal_deadline`.
 - **Calculations** (`calculations.ts`, pure functions, no AI):
-  - BMI, Mifflin-St Jeor **BMR**, **TDEE** (BMR × activity multiplier 1.2–1.9)
-  - **Weight-loss plan**: given current/target weight and TDEE, computes weekly loss rate (capped at 1kg/week, respects a goal deadline if set or defaults to a safe pace), daily calorie target (floored at 1500 kcal), protein target (2g/kg bodyweight), and a 25%-fat / remainder-carbs macro split — plus an expected goal-completion date
-  - **Health Score breakdown** (0–100, distinct from the Dashboard's health sub-score): `nutrition×0.3 + activity×0.25 + sleep×0.25 + consistency×0.20`, each sub-score carrying a plain-English reason string (e.g. "Protein is 24g below target", "7h is below the 7–9h target"). Activity score also detects habit names matching `/gym|workout|run|walk/i` as a proxy for "worked out today."
+  - **BMI** = `weightKg / (heightCm/100)²`
+  - **BMR** (Mifflin-St Jeor): `10×weightKg + 6.25×heightCm − 5×age`, `+5` for male / `−161` for female
+  - **TDEE** = `BMR × activity multiplier` (`sedentary 1.2, light 1.375, moderate 1.55, active 1.725, very_active 1.9`)
+  - **Weight-loss plan**: weekly loss rate capped at 1kg/week (paced to a `goal_deadline` if set, else a default safe pace), daily calorie target = `max(1500, TDEE − dailyDeficit)` where `dailyDeficit = weeklyLossKg × 7700 / 7`, protein target = `2g × bodyweight(kg)`, fat = `25% of calorie target ÷ 9`, carbs = remainder `÷ 4`
+  - **Health Score (0–100)**: `nutrition×0.4 + activity×0.3 + sleep×0.3` — nutrition blends calorie-accuracy and protein-hit-rate (0 if nothing logged); activity blends step-target-% with a workout-today bonus/floor; sleep scores highest for 7–9h and decays outside that band; each sub-score carries a plain-English reason (e.g. "Protein is 24g below target")
+- **Line charts** (`MetricChart.tsx`) — Weight (14-day, "lower is better" coloring), Calories, Protein, Sleep, Steps: SVG line+area charts with per-point tooltips and a trend readout (`↓/↑/→ Δ over N days`), replacing the old column charts.
 - **AI features**:
-  - `getHealthReport` — weekly trend report (weight change over the period, sleep/calorie/protein/step/water averages) with a /10 score, what's working, what isn't, 3 recommendations
-  - `getDailyHealthPlan` — today's action checklist: remaining calories/protein/water to hit target, habit status, current Health Score with reasons, output as an emoji checklist under 150 words, plain text
+  - `getHealthReport` — weekly trend report (weight change, sleep/calorie/protein/step/water averages) with a /10 score, what's working, what isn't, 3 recommendations — under 200 words
+  - `getDailyHealthPlan` — today's remaining calories/protein/water vs. target, workout/sleep guidance, tied to the current Health Score — plain-text emoji checklist, under 150 words
 
 ## 6. Learning (`/learning`)
 
 Resource tracker: `title`, `type` (course/book/video/article/podcast), `url`, `category`, `status` (not-started/in-progress/completed), `progress` (0–100), `notes`.
 
 - Add / update status+progress+notes / delete
-- **Study logs** — `resource_id`, `duration_minutes`, `notes`, `date`; last 30 days fetched with the page
+- **Study logs** — `resource_id`, `duration_minutes`, `notes`, `date`; drives a study-streak counter and "minutes this week" stat
+- **Revision nudge ("what am I forgetting")** — deterministic, not AI: a `Needs Revision` card surfaces any `completed` resource with no study-log activity in the last 14 days, with a one-click "+ Log session" action. Same rule is exposed via the Telegram bot ("what needs revision").
 - **AI daily study plan** — given in-progress/not-started/completed counts and what's already been studied today, Claude proposes a "main focus" (60 min, references an actual resource by name), a "quick review" (15 min), and an optional stretch item — under 150 words
-- **AI resource quiz** — `generateResourceQuiz(title, category, type, notes)` generates 5 comprehension questions (mixed conceptual/applied/comparison) as JSON, presumably for self-testing after finishing a resource
+- **AI resource quiz** — `generateResourceQuiz(title, category, type, notes)` generates 5 mixed conceptual/applied/comparison questions as JSON for self-testing, click-to-reveal in the UI
 
 ## 7. Coding (`/coding`)
 
-Two halves: a **project tracker** and an automated **daily coding-challenge habit system**.
+Two systems: an automated **daily coding-challenge habit** and a **trending-reading habit**, both synced into Planner. (The old manual "Projects" tracker with tech-stack tags was removed — GitHub push activity now drives the Coding score on the Dashboard instead.)
 
-- **Projects** — `name`, `description`, `status` (idea/in-progress/paused/completed), `stack` (tag array), `github_url`, `live_url`. Add / update status / delete.
-- **Daily coding challenge** (`daily-core.ts`, driving `coding_daily_questions` + `coding_questions` tables):
-  - Two modes, per-user in `coding_settings`: **rotation** (weekday-based difficulty mix — Mon: 1 easy, Tue: easy+medium, Wed: 2 medium, Thu: medium+hard, Fri: 2 medium, Sat: 1 hard, **Sun: none — revision day**) or **fixed** (always N random questions/day, no difficulty pattern)
-  - Picks random unassigned questions from the `coding_questions` pool per difficulty bucket; if a difficulty bucket is exhausted, the cycle restarts (questions can repeat once the pool is exhausted)
-  - Idempotent per day: calling it again the same day returns the existing assignment instead of generating a new one
-  - **Each assigned question auto-creates a linked Planner task** (`area: "Coding"`, priority "high" for hard questions else "medium") — this is the mechanism behind the Planner two-way sync in §2
-  - **Stats**: current streak, longest streak (both computed by walking `assigned_date`/`completed` history day-by-day; today is allowed to be pending without breaking the current streak), total/easy/medium/hard solved counts, completion rate
-  - **Calendar view** (`computeCodingCalendar`) — up to 182 days back, each day classified `solved` / `partial` / `missed` / `none` for a GitHub-style contribution heatmap
-  - `telegram_notify` setting can turn off the daily Telegram push (§10) without disabling the assignment logic itself
+- **Daily coding challenge** (`daily-core.ts`, driving `coding_daily_questions` + `coding_questions`):
+  - Two modes, per-user in `coding_settings`: **rotation** (weekday-based difficulty mix — Sun: none/revision day, Mon: 2 easy, Tue–Fri: 1 medium (Sat: 1 hard) — never two medium/hard in a day) or **fixed** (always N random questions/day)
+  - Idempotent per day; if a difficulty bucket is exhausted, the pool cycle restarts (questions can repeat)
+  - **Each assigned question auto-creates a linked Planner task** (`area: "Coding"`, priority "high" for hard else "medium") — see the two-way sync below
+  - **Stats**: current/longest streak (today is allowed to be pending without breaking the current streak), total/easy/medium/hard solved, completion rate
+  - **Contribution calendar** — up to 182 days back, each day classified solved/partial/missed/none (GitHub-style heatmap)
+  - `telegram_notify` setting turns off the daily Telegram push without disabling assignment logic
+- **Trending reading** (`trending_readings`, mirrors the coding-question pattern) — one per day, deterministic (no AI): fetches Hacker News's front page (`hn.algolia.com` Algolia API), keyword-matches titles against a ~35-term frontend/AI/JS word list (word-boundary regex — avoids false positives like "ai" inside "maintain"), excludes stories already surfaced before, picks the highest-points match. Surfaced as a card on the Coding page ("Today's Trending Read") and auto-creates a linked, low-priority Planner task until read.
+- **Two-way sync (Planner ↔ Coding ↔ Trending)**: both `coding_daily_questions` and `trending_readings` carry a `task_id` FK into `tasks`. Generating either inserts the Planner task first, then the module row referencing it. Completing from the Coding page marks the linked task done. Completing/un-completing the task in Planner mirrors back onto both tables via `task_id` (no-op if there's no match). Both directions revalidate `/planner` and `/coding`.
 
 ## 8. Documents (`/documents`)
 
 A personal full-text knowledge base: `title`, `content`, `tags` (array), `summary`, `updated_at`.
 
-- Add / edit / delete
-- **Auto-summarization**: every create/update that has ≥300 characters of content triggers an async Claude call (`generateSummary`, capped at first 6000 chars) to write a 2–3 sentence summary stored alongside the document — silently skipped (empty string) if content is short or the AI call fails
-- **AI document Q&A** (`doc-qa.ts`): ask a question about one specific document; Claude answers strictly from that document's content (truncated to 6000 chars) and says explicitly if the answer isn't in the text
-- **AI document summarization** — on-demand 3–5 bullet-point summary of a document (distinct code path from the auto-summary above, used interactively)
+- Add / edit / delete; two-pane UI with search across title/content/tags
+- **Auto-summarization**: any create/update where content is ≥300 characters triggers a 2–3 sentence Claude summary (content truncated to 6000 chars first), stored in `summary`; skipped (and left as `''`) for short content. Re-summarizes only when title/content actually changed, not on tag-only edits.
+- **AI document Q&A** (`doc-qa.ts`): ask a question about one specific document; Claude answers strictly from that document's content and says explicitly if the answer isn't in the text
+- **AI document summarization** — on-demand 3–5 bullet-point summary (separate prompt/code path from the auto-summary, used interactively via an "Ask AI" panel)
 
-## 9. Telegram bot — the interaction layer
+## 9. Settings (`/settings`)
 
-This is the most distinctive part of the system: **each module is its own Telegram bot** (own `TELEGRAM_BOT_TOKEN_*`), all pointed at one webhook handler (`src/app/api/telegram`) that dispatches by module name to `src/features/telegram/handler.ts`.
+- **Account** — shows the signed-in email; Sign Out.
+- **Data Export** — one-click download of a full JSON backup spanning essentially every table (Planner, Career incl. resumes, Finance incl. recurring expenses, Health incl. workouts, Learning, Coding, Documents, Reminders, and score/XP history) — deterministic, no AI.
+- **AI Budget** — read-only display of today's/this-month's AI spend against the daily/monthly ceilings (see AI Gateway, §12); ceilings themselves are env-var-only (`AI_DAILY_BUDGET_USD`/`AI_MONTHLY_BUDGET_USD`), not editable from the UI.
+- **Reminders** — freeform `label` + `module` + `slot` (morning/evening). Delivery isn't its own cron — it piggybacks on the existing daily-briefing (morning) and evening-checkin (evening) cron windows, since the hosting plan only supports daily-granularity schedules.
 
-How a message is processed:
-1. Only messages from `TELEGRAM_ALLOWED_CHAT_ID` are accepted — this is a single-user, single-chat system, not multi-tenant
-2. **Voice messages** are transcribed first via Groq (`transcribeVoice`, needs `GROQ_API_KEY`) before anything else happens — so every module is fully usable by voice note, not just text
-3. The transcribed/typed text is sent to Claude along with a **module-specific system prompt** that defines a small JSON action grammar (e.g. `{"action":"add_expense","amount":500,"category":"Food",...}`) plus the *actual current date* injected into the prompt (so "today"/relative dates never rely on the model's training cutoff)
-4. Claude's JSON response is parsed and dispatched to that module's `execute()` function, which does the real Supabase read/write and formats a Markdown reply (with emoji category/status indicators)
-5. Every interaction — module, chat id, raw message, parsed action, and reply — is logged to `telegram_logs` (used by the Dashboard's "recent bot activity" feed); logging failures are non-fatal
+## 10. Telegram bot — the interaction layer
+
+Each module is its own Telegram bot (own `TELEGRAM_BOT_TOKEN_*`), all pointed at one webhook (`src/app/api/telegram/[module]/route.ts` → `src/features/telegram/handler.ts`).
+
+**Processing pipeline:**
+1. Only messages from `TELEGRAM_ALLOWED_CHAT_ID` are accepted (single-user, single-chat system).
+2. A daily AI-call cap (`TELEGRAM_DAILY_AI_CAP`, default 300) counted from `telegram_logs` protects against runaway spend — once hit, the bot replies with a quota message and skips processing entirely for the rest of the day.
+3. **Voice messages** are transcribed first via Groq's `whisper-large-v3-turbo` (needs `GROQ_API_KEY`) before anything else happens.
+4. **Photos** are supported by Finance (receipt → extracts amount + category) and Health (meal photo → estimates calories + protein) via a per-module `VISION_PROMPT`; other bots reply that photos aren't supported yet.
+5. The transcribed/typed text (or image) goes to Claude with a module-specific system prompt defining a JSON action grammar, plus the actual current date injected (so "today" never relies on the model's training cutoff). A single message can produce **multiple actions** (e.g. a voice note describing a workout, water, and a finished chapter all at once) — the model returns a JSON array instead of one object, and each is executed and replied to in turn.
+6. Claude's response is parsed and dispatched to that module's `execute()`, which does the real Supabase read/write and formats a Markdown reply.
+7. Every interaction (module, chat id, message, parsed action(s), reply) is logged to `telegram_logs`, non-fatal on logging failure.
+
+**Cross-cutting bot features:**
+- **Undo/amend**: Planner supports `undo_last` (deletes the most recently added task); Finance supports `undo_last` (deletes the most recent expense) and `amend_expense` (corrects just the amount on the most recent expense).
+- **Reminders**: Planner can `set_reminder`/`list_reminders`/`delete_reminder` (writes the `reminders` table used by Settings, §9).
+- **Inline buttons**: adding a task attaches a "✅ Mark Done" button; tapping it completes the task (and syncs Coding/Trending if linked) without going through the AI layer at all.
+- **Proactive budget nudge**: logging an expense via Finance checks that category's budget and appends a warning if it's now over or ≥90% used.
 
 **Per-module natural-language capabilities:**
 
-| Bot | Example phrases it understands | Actions |
+| Bot | Example phrases | Actions |
 |---|---|---|
-| **Planner** | "add buy groceries high priority", "show pending tasks", "done with buy groceries", "delete buy groceries", "add call dentist due 2026-07-10" | add/list/complete/delete task |
-| **Career** | "applied to Google as Frontend Engineer", "Google moved me to interview", "show all applications", "add note to Google: good culture fit", "pipeline summary" | add/update-status/list application, add note, status summary |
-| **Finance** | "spent 500 on Swiggy food", "show today's expenses", "monthly summary", "set food budget 8000", "net worth", "my salary is 120000", "add home loan 20L EMI 15000 180 months", "add SIP Axis Bluechip invested 50000 current 65000", "can I afford a car?", "should I prepay my loan?" | expense add/list, monthly summary, set budget/salary, add loan/investment, net-worth snapshot, free-form AI advisor Q&A |
-| **Health** | "weight 88kg", "slept 7.5 hours", "8000 steps", "2000 calories", "120g protein", "2L water" (auto-converted to ml), "logged my run" (fuzzy-matches an existing habit), "did meditation", "show habits", "today's summary", "add habit Journaling 📔" | log metric, log/list habit, add habit, today's metrics/summary |
-| **Learning** | "add Next.js course from Udemy", "started JavaScript: The Good Parts book", "update Next.js to 60%", "finished React docs", "show in-progress resources" | add resource, update progress, mark complete, list by status |
-| **Coding** | "add project Portfolio with Next.js and Tailwind", "started working on Portfolio", "show in-progress projects", "Portfolio is done", "add note to Portfolio: deploy to Vercel next", "today's question", "solved Two Sum" | project CRUD, fetch/complete today's coding challenge (fuzzy title match) |
+| **Planner** | "add buy groceries high priority", "show pending tasks", "done with buy groceries", "delete buy groceries", "undo that", "how am I doing" (briefing), "how was my week" (digest), "remind me to log weight every morning" | add/list/complete/delete/undo task, morning briefing, weekly digest, reminder CRUD |
+| **Career** | "applied to Google as Frontend Engineer", "Google moved me to interview", "show all applications", "add note to Google: good culture fit", "pipeline summary", "am I ready for a staff role?" | add/update-status/list application, add note, status summary, free-form AI mentor Q&A |
+| **Finance** | "spent 500 on Swiggy food", "show today's expenses", "monthly summary", "set food budget 8000", "actually make that 400" (amend), "undo that", "net worth", "my salary is 120000", "add home loan 20L EMI 15000 180 months", "add SIP Axis Bluechip invested 50000 current 65000", "can I afford a car?", *[receipt photo]* | expense add/list/undo/amend, monthly summary, set budget/salary, add loan/investment, net-worth snapshot, free-form AI advisor Q&A, receipt-photo expense capture |
+| **Health** | "weight 88kg", "slept 7.5 hours", "8000 steps", "2000 calories", "120g protein", "2L water", "recovery 4/5", "did 45 min strength training", "today's plan", "how was my week", *[meal photo]* | log metric/workout, today's metrics, AI daily plan, AI weekly report, meal-photo calorie/protein estimate |
+| **Learning** | "add Next.js course from Udemy", "started JavaScript: The Good Parts book", "update Next.js to 60%", "finished React docs", "show in-progress resources", "what should I study today", "what am I forgetting" | add resource, update progress, complete, list by status/needs-revision, AI daily study plan |
+| **Coding** | "today's question", "solved Two Sum", "today's reading", "finished reading" | fetch/complete today's coding challenge (fuzzy title match), fetch/complete today's trending read |
 | **Documents** | "note that Next.js 15 uses server components by default", "create doc Interview Prep with content...", "add to Interview Prep: practice system design", "search React hooks", "list documents" | create/append/search/list documents |
 
-Any message the model can't confidently map to an action falls back to `{"action":"help"}`, which each bot answers with its own cheat-sheet of example phrases (shown in the table above).
+Any message the model can't confidently map to an action falls back to `{"action":"help"}`, answered with that bot's own cheat-sheet.
 
-## 10. Scheduled jobs (Vercel Cron)
+## 11. Scheduled jobs (Vercel Cron)
 
-Defined in `vercel.json`, all protected by a shared-secret `Authorization: Bearer $CRON_SECRET` header, all resolving the single app user via `supabase.auth.admin.listUsers()[0]` (this is a single-user deployment, not multi-tenant):
+Defined in `vercel.json`, all protected by `Authorization: Bearer $CRON_SECRET`, all resolving the single app user via `supabase.auth.admin.listUsers()[0]` (single-user deployment):
 
-| Job | Schedule (UTC) | What it does |
-|---|---|---|
-| `daily-briefing` | `0 3 * * *` (~8:30am IST) | Recomputes today's Life Score components, compares to yesterday's, and has Claude write a <120-word motivating morning message (score trend, single most important action, one thing to watch) — sent via the Planner bot |
-| `daily-coding` | `5 3 * * *` (~8:35am IST) | Generates (or fetches) today's coding-challenge assignment and pushes it via the Coding bot, respecting the per-user `telegram_notify` setting; silently no-ops on revision days or an empty pool |
-| `evening-checkin` | `30 14 * * *` **and** `0 17 * * *` (8:00pm and 10:30pm IST) | Checks for anything still un-logged today — pending habits, unfinished high-priority tasks, no expense logged, missing health metrics (weight/sleep/steps/calories) — and only sends a message if something is actually outstanding; stays silent once everything's logged |
-| `weekly-digest` | `30 2 * * 0` (Sunday ~8am IST) | Pulls the last 7 days from `life_score_logs`, computes averages per module, identifies the strongest/weakest module and best/worst day, renders an ASCII progress-bar scorecard, and has Claude write a 3-sentence weekly review |
+| Job | Schedule (UTC / IST) | Sends via | What it does |
+|---|---|---|---|
+| `daily-briefing` | `0 3 * * *` (~8:30am IST) | Planner bot | Recomputes today's Life Score vs. yesterday's, has Claude write a <120-word morning message, appends any active morning Reminders. Always sends. |
+| `daily-coding` | `5 3 * * *` (~8:35am IST) | Coding bot | Generates/fetches today's coding assignment; on a revision day, surfaces up to 3 incomplete past questions instead of going silent. Skipped if `coding_settings.telegram_notify = false`. |
+| `recurring-expenses` | `10 3 * * *` (~8:40am IST) | — (no message) | Auto-posts any active recurring-expense template due today into `expenses`, idempotently. Purely a DB write, silent by design. |
+| `trending-reading` | `20 3 * * *` (~8:50am IST) | Coding bot | Generates/fetches today's trending read and sends it. Skipped if `coding_settings.telegram_notify = false` or no matching story exists today. |
+| `evening-checkin` | `30 14 * * *` **and** `0 17 * * *` (8:00pm and 10:30pm IST — runs twice) | Planner bot | Checks for un-logged habits/tasks/expenses/metrics and an at-risk coding streak; appends any active evening Reminders; **only sends if something is actually outstanding**, otherwise stays silent. |
+| `weekly-digest` | `30 2 * * 0` (Sunday ~8am IST) | Planner bot | Averages the last 7 days of `life_score_logs` per module, identifies strongest/weakest module and best/worst day, has Claude write a 3-sentence review (<80 words), renders an ASCII progress-bar scorecard, and appends a deterministic category-wise weekly spend breakdown (highest-spend category first). |
 
-All four use the Planner bot's token to send (`TELEGRAM_BOT_TOKEN_PLANNER`), regardless of which module they're reporting on.
+## 12. AI Gateway
 
-## AI model & failure handling
+Every AI call in the app funnels through one function: `askAI(task, prompt, system?, opts?)` in `src/lib/ai-gateway.ts`. No feature module calls Anthropic directly (`src/lib/anthropic.ts`'s `callClaude()` is a low-level primitive only the gateway imports). This is Product Principle 3 made concrete.
 
-Every AI call funnels through one helper, `src/lib/anthropic.ts` → `aiText(prompt, system?)`, using `claude-sonnet-4-6` with a 4096-token cap. Almost every call site wraps this in `.catch(() => '')` (or an equivalent empty-array fallback for JSON-returning calls), so **a missing/invalid `ANTHROPIC_API_KEY` degrades every AI feature to silently absent output rather than crashing a page or a cron job.**
+- **Model routing** — a fixed per-task table picks the model. Only `telegram_intent` and `doc_summary` route to Haiku (`claude-haiku-4-5`); every other task (`doc_qa`, `career_mentor`, `interview_questions`, `finance_advisor`, `health_report`, `health_daily_plan`, `study_plan`, `resource_quiz`, `module_recommendations`, `daily_briefing`, `weekly_digest`, `telegram_vision`) routes to Sonnet (`claude-sonnet-4-6`).
+- **Response caching** — `ai_cache` table, key = `sha256(model::system::prompt)`. A changed prompt (i.e. changed underlying data) naturally busts the cache. Per-task TTLs range from none (always fresh, e.g. Q&A tasks) up to 7 days (`doc_summary`); images are never cached. A cache hit skips the API call entirely and logs zero cost.
+- **Budget enforcement** — `ai_usage_logs` logs every call (task, model, tokens, `estimated_cost_usd`, cache-hit flag). Before calling the model, the gateway sums today's and this month's spend; if either meets `AI_DAILY_BUDGET_USD` (default $3) or `AI_MONTHLY_BUDGET_USD` (default $50), it skips the API call and returns that task's configured fallback string instead — most tasks fall back to an empty string or `'[]'`/`'{"action":"help"}'` for silent degradation, while a few user-facing Q&A tasks (`doc_qa`, `career_mentor`, `finance_advisor`, `health_report`) return an explicit "I'm over my AI budget for today" message. No page or cron job can break from this.
+- **Rule-engine-first**: score math, sorting, chart data, the coding rotation, the trending-reading pick, the recurring-expense post, and the revision-nudge rule are all deterministic — never routed through `askAI`, per Product Principle 2.
+
+**AI feature files** (`src/features/ai/`), all going through the gateway: `career-mentor.ts`, `finance-advisor.ts`, `health-report.ts`, `study-plan.ts`, `doc-qa.ts`, `weekly-digest.ts`, `recommendations.ts` (the generic "AI {Module} Advisor" widget — currently wired into Planner, Health, Learning, and Coding only; Career, Finance, and Documents each have a dedicated advisor instead so the generic widget was removed from those three).
 
 ---
 
@@ -157,9 +188,9 @@ Every AI call funnels through one helper, `src/lib/anthropic.ts` → `aiText(pro
 - **Auth + DB**: Supabase (PostgreSQL + Row Level Security)
 - **Styling**: Tailwind CSS v3 with a custom `surface` / `accent` color system
 - **Components**: shadcn/ui (Radix UI primitives)
-- **AI**: Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`
-- **Voice transcription**: Groq (for Telegram voice notes)
-- **Bot**: Telegram Bot API webhooks, one bot token per module
+- **AI**: Anthropic Claude — `claude-sonnet-4-6` (reasoning/coaching tasks) and `claude-haiku-4-5` (structured/mechanical tasks) via `@anthropic-ai/sdk`, both routed through the AI Gateway (§12)
+- **Voice transcription**: Groq `whisper-large-v3-turbo` (for Telegram voice notes)
+- **Bot**: Telegram Bot API webhooks, one bot token per module, supporting text/voice/photo input
 - **Deploy**: Vercel (auto-deploy from `master`), Vercel Cron for scheduled jobs
 
 ## Architecture
@@ -176,46 +207,54 @@ Every AI call funnels through one helper, `src/lib/anthropic.ts` → `aiText(pro
 - `src/lib/supabase/server.ts` — server components and server actions (cookies-based, RLS-scoped to the logged-in user)
 - `src/lib/supabase/client.ts` — client components (browser)
 - `src/lib/supabase/service.ts` — service-role client (used by cron jobs and the Telegram webhook — bypasses RLS since those code paths run without a browser session)
-- `src/lib/supabase/middleware.ts` — session refresh + redirect logic, wired in root `middleware.ts` (matcher excludes `/api`, `_next/static`, `_next/image`, favicon, and image assets — so Telegram/cron webhooks are never gated by the browser auth check)
+- `src/lib/supabase/middleware.ts` — session refresh + redirect logic, wired in root `src/middleware.ts` (matcher excludes `/api`, `_next/static`, `_next/image`, favicon, and image assets — so Telegram/cron webhooks are never gated by the browser auth check). Unauthenticated users on a page route are redirected to `/login`; authenticated users hitting `/login` are redirected to `/planner` (the authenticated landing page — distinct from `/dashboard`).
 
 **Loading / error states:**
 - `src/app/[route]/loading.tsx` — skeleton shown while the server fetches data
 - `src/app/[route]/error.tsx` — error boundary with a "Try again" reset button
 
-**Shared components** (`src/components/`): `Sidebar`, `Header`, `Card`, `UserInfo`, `Skeleton`.
+**Shared components** (`src/components/`): `Sidebar`, `BottomNav`, `Header`, `Card`, `UserInfo`, `Skeleton`.
+
+**Navigation structure** — desktop `Sidebar` groups modules by PRD-v2's "Growth Engine" pillars (Dashboard sits ungrouped above them): **Learn** → Learning; **Build** → Coding; **Perform** → Planner, Career; **Recover** → Health; then Finance and Documents ungrouped below (they don't map to a pillar), with Settings pinned in the footer. Mobile `BottomNav` uses a different, usage-frequency-based grouping instead (Home/Planner/Health/Finance in the primary row, everything else — including Career and Learning — behind a "More" sheet) rather than mirroring the pillar structure.
 
 ## Database
 
-All tables have `user_id uuid references auth.users` and 4 RLS policies (select/insert/update/delete scoped to `auth.uid()`), except where noted.
+Standard pattern: `user_id uuid references auth.users` + 4 RLS policies (select/insert/update/delete scoped to `auth.uid()`), except where noted.
 
 | Table | Key columns |
 |---|---|
 | `tasks` | text, done, priority, area, due_date, recurrence |
-| `applications` | company, role, status, salary_range, location, url, notes, applied_at |
+| `applications` | company, role, status, salary_range, location, url, notes, applied_at, resume_version_id |
+| `resume_versions` | name, content, url, notes, is_primary |
 | `career_profile` | current_role, current_company, current_salary, target_role, years_experience, bio (one row/user) |
 | `skills` | name, category, level |
 | `interview_qa` | question, answer, topic, difficulty |
-| `expenses` | amount, category, description, date |
+| `expenses` | amount, category, description, date, recurring_expense_id |
+| `recurring_expenses` | name, amount, category, day_of_month (1–28), active |
 | `budgets` | category, amount, month (unique per user+category+month) |
 | `finance_profile` | monthly_salary, emergency_fund_months (one row/user) |
 | `salary_history` | amount, effective_date, note — appended automatically on salary change |
 | `loans` | name, principal, emi, interest_rate, remaining_months |
 | `investments` | name, type, invested_amount, current_value, notes |
 | `financial_goals` | name, target_amount, current_amount, target_date, priority |
-| `habits` | name, icon |
-| `habit_logs` | habit_id, date (unique per habit+date) |
-| `health_metrics` | date, weight_kg, calories, protein_g, sleep_hours, steps, water_ml, notes (unique per user+date) |
+| `health_metrics` | date, weight_kg, calories, protein_g, sleep_hours, steps, water_ml, recovery_score, notes (unique per user+date) |
+| `workouts` | date, type, duration_minutes, notes |
 | `health_profile` | age, gender, height_cm, target_weight_kg, activity_level, workout_days_per_week, food_preference, goal_deadline (one row/user) |
 | `resources` | title, type, url, category, status, progress, notes |
 | `study_logs` | date, resource_id, duration_minutes, notes |
-| `projects` | name, description, status, stack (text[]), github_url, live_url |
-| `coding_questions` | title, difficulty, url, source (shared question pool) |
+| `coding_questions` | title, difficulty, url, source — global question pool, **no `user_id`** |
 | `coding_daily_questions` | question_id, assigned_date, completed, completed_at, time_spent_minutes, notes, rating, favorite, needs_revision, task_id (links to `tasks`) |
 | `coding_settings` | mode (rotation/fixed), fixed_count, telegram_notify (one row/user) |
+| `trending_readings` | assigned_date, title, url, source, points, completed, completed_at, task_id (unique per user+date) |
 | `documents` | title, content, tags (text[]), summary, updated_at |
+| `reminders` | module, label, slot (morning/evening), active |
 | `life_score_logs` | date, life_score, health_score, finance_score, career_score, learning_score, projects_score (unique per user+date; append-only history) |
-| `user_xp` | xp, level, badges, updated_at (one row/user; recomputed from `life_score_logs` on every dashboard load) |
-| `telegram_logs` | module, telegram_chat_id, message, action_taken (jsonb), response, created_at — audit trail of every bot interaction |
+| `user_xp` | xp, level, badges, updated_at (one row/user; recomputed on every dashboard load, currently not surfaced in the UI) |
+| `telegram_logs` | module, telegram_chat_id, message, action_taken (jsonb), response, created_at — **no `user_id`**; select policy is role-scoped (`auth.role() = 'authenticated'`), not owner-scoped |
+| `ai_cache` | cache_key (unique), response, model, expires_at — RLS enabled with **no policies** (service-role access only, by design) |
+| `ai_usage_logs` | task, model, input_tokens, output_tokens, estimated_cost_usd, cache_hit, created_at — select/insert-own only, no update/delete policies |
+
+**Dropped tables** (existed at some point, since removed — mentioned here so their absence isn't mistaken for an oversight): `habits`, `habit_logs` (habit tracker retired), `projects` (manual project tracker retired in favor of GitHub-activity scoring), `focus_sessions` (deep-work tracking, removed days after being added).
 
 ## Development
 
@@ -240,6 +279,8 @@ SUPABASE_USER_ID=              # this user's auth.users id — used by cron jobs
 # AI
 ANTHROPIC_API_KEY=
 GROQ_API_KEY=                  # Telegram voice-note transcription
+AI_DAILY_BUDGET_USD=           # optional, default 3 — AI Gateway daily spend ceiling
+AI_MONTHLY_BUDGET_USD=         # optional, default 50 — AI Gateway monthly spend ceiling
 
 # Telegram — one bot token per module, all in one allowed chat
 TELEGRAM_ALLOWED_CHAT_ID=
@@ -250,11 +291,12 @@ TELEGRAM_BOT_TOKEN_HEALTH=
 TELEGRAM_BOT_TOKEN_LEARNING=
 TELEGRAM_BOT_TOKEN_CODING=
 TELEGRAM_BOT_TOKEN_DOCUMENTS=
+TELEGRAM_DAILY_AI_CAP=         # optional, default 300 — max AI-processed Telegram messages/day
 
 # Cron
 CRON_SECRET=                   # must match the Authorization: Bearer header Vercel Cron sends
 
-# Optional — powers the Projects/GitHub component of the Life Score
+# Optional — powers the Coding/GitHub component of the Life Score
 GITHUB_USERNAME=
 GITHUB_TOKEN=
 ```
