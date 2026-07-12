@@ -83,7 +83,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
     { label: 'Finance',  score: scores.finance,           color: '#22c55e', to: '/finance' },
     { label: 'Career',   score: scores.career,            color: '#f59e0b', to: '/career' },
     { label: 'Learning', score: scores.learning,          color: '#a855f7', to: '/learning' },
-    { label: 'Projects', score: scores.projects ?? 0,     color: '#06b6d4', to: '/coding' },
+    { label: 'Coding',   score: scores.projects ?? 0,     color: '#06b6d4', to: '/coding' },
   ]
 
   const modules = [
@@ -109,25 +109,25 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* Hero: Life Score + Module Scores */}
-      <div className="bg-gradient-to-br from-surface-1 via-surface-2 to-surface-1 border border-surface-3 rounded-2xl p-5">
-        <div className="flex flex-col lg:flex-row items-center gap-6">
+      <div className="bg-gradient-to-br from-surface-1 via-surface-2 to-surface-1 border border-surface-3 rounded-2xl p-3.5">
+        <div className="flex flex-col lg:flex-row items-center gap-4">
           {/* Circular Score */}
           <div className="shrink-0">
-            <p className="text-xs text-slate-500 uppercase tracking-widest text-center mb-2">Life Score</p>
+            <p className="text-xs text-slate-500 uppercase tracking-widest text-center mb-1">Life Score</p>
             <ScoreHero score={scores.life ?? 0} />
           </div>
 
           {/* Divider */}
-          <div className="hidden lg:block w-px h-32 bg-surface-3" />
+          <div className="hidden lg:block w-px h-20 bg-surface-3" />
           <div className="block lg:hidden w-full h-px bg-surface-3" />
 
           {/* Module Scores */}
           <div className="flex-1 w-full">
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">Module Scores</p>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">Module Scores</p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {moduleScores.map(({ label, score, color, to }) => (
                 <Link key={to} href={to}
-                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 transition-colors group">
+                  className="flex flex-col items-center gap-1 p-1.5 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 transition-colors group">
                   <div className="relative">
                     <MiniRing score={score} color={color} />
                     <span
@@ -142,8 +142,8 @@ export default function DashboardView({ data }: { data: DashboardData }) {
             </div>
 
             {/* Weights label */}
-            <p className="text-xs text-slate-700 mt-2 text-center">
-              Health 25% · Finance 20% · Career 20% · Learning 20% · Projects 15%
+            <p className="text-xs text-slate-700 mt-1.5 text-center">
+              Health 25% · Finance 20% · Career 20% · Learning 20% · Coding 15%
             </p>
           </div>
         </div>

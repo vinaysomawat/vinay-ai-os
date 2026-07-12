@@ -168,6 +168,8 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
 
   return (
     <div className="space-y-5">
+      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
+
       {/* Health profile setup / edit */}
       {!profile ? (
         <div className="bg-gradient-to-br from-accent/10 to-transparent border border-accent/30 rounded-xl p-5 flex items-center justify-between gap-4">
@@ -354,8 +356,6 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           </div>
         )}
       </div>
-
-      <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, sleep=${todayMetric?.sleep_hours ?? 'not logged'}h, steps=${todayMetric?.steps ?? 'not logged'}, water=${todayMetric?.water_ml ?? 'not logged'}ml, recovery=${todayMetric?.recovery_score ?? 'not logged'}/5. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. ${weightLossPlan ? `Goal: ${profile?.target_weight_kg}kg by ${weightLossPlan.expectedGoalDate}.` : 'No weight goal set yet.'}`} />
     </div>
   )
 }

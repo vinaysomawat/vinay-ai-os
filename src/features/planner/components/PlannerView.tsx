@@ -89,6 +89,8 @@ export default function PlannerView({ initialTasks }: Props) {
 
   return (
     <div className="space-y-5">
+      <ModuleRecommendations moduleLabel="Planner" context={plannerContext} />
+
       {/* Week strip */}
       <div className="grid grid-cols-7 gap-1.5">
         {days.map((d, i) => (
@@ -205,8 +207,6 @@ export default function PlannerView({ initialTasks }: Props) {
           </details>
         )}
       </Card>
-
-      <ModuleRecommendations moduleLabel="Planner" context={plannerContext} />
     </div>
   )
 }

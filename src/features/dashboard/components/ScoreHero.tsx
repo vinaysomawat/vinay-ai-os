@@ -39,11 +39,11 @@ export default function ScoreHero({ score }: { score: number }) {
     score >= 50 ? 'text-amber-400' : 'text-red-400'
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-1.5">
       <div className="relative">
         {/* Glow */}
-        <div className="absolute inset-4 rounded-full blur-3xl opacity-25 bg-gradient-to-br from-[#7c6af7] to-[#06b6d4]" />
-        <svg viewBox="0 0 144 144" className="w-44 h-44 relative z-10" style={{ transform: 'rotate(-90deg)' }}>
+        <div className="absolute inset-3 rounded-full blur-2xl opacity-20 bg-gradient-to-br from-[#7c6af7] to-[#06b6d4]" />
+        <svg viewBox="0 0 144 144" className="w-28 h-28 relative z-10" style={{ transform: 'rotate(-90deg)' }}>
           <circle cx="72" cy="72" r={r} fill="none" stroke="#26263a" strokeWidth="10" />
           <circle cx="72" cy="72" r={r} fill="none"
             stroke="url(#lifeGrad)" strokeWidth="10"
@@ -57,15 +57,15 @@ export default function ScoreHero({ score }: { score: number }) {
           </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-          <span className="text-5xl font-bold text-white tabular-nums leading-none">{score}</span>
-          <span className="text-xs text-slate-500 mt-1 font-medium">/100</span>
+          <span className="text-2xl font-bold text-white tabular-nums leading-none">{score}</span>
+          <span className="text-[10px] text-slate-500 mt-0.5 font-medium">/100</span>
         </div>
       </div>
 
-      <div className="text-center space-y-1">
-        <p className={`text-sm font-bold ${levelColor}`}>{level}</p>
+      <div className="text-center space-y-0.5">
+        <p className={`text-xs font-bold ${levelColor}`}>{level}</p>
         {delta !== null && (
-          <p className={`text-xs font-medium ${delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <p className={`text-[11px] font-medium ${delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {delta > 0 ? '↑' : delta < 0 ? '↓' : '→'} {delta > 0 ? `+${delta}` : delta} from yesterday
           </p>
         )}

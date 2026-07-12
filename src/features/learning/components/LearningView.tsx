@@ -122,6 +122,8 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
 
   return (
     <div className="space-y-5">
+      <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`} />
+
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4 flex flex-col items-center">
@@ -188,8 +190,6 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
         </Card>
       )}
 
-      <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`} />
-
       {/* Status filter + Resource list */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === 'all' ? 'bg-accent text-white' : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
@@ -212,54 +212,48 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
         </button>
       }>
         {filtered.length === 0 && <p className="text-sm text-slate-600 text-center py-8">Nothing here yet</p>}
-        <ul className="space-y-2">
+        <ul className="space-y-1">
           {filtered.map(r => {
             const cfg = STATUS_CONFIG[r.status]
             const studiedToday = studiedTodayIds.has(r.id)
             return (
-              <li key={r.id} className="p-3 rounded-lg bg-surface-2 border border-surface-3 group">
-                <div className="flex items-start gap-3">
-                  <span className="text-lg mt-0.5 shrink-0">{TYPE_ICON[r.type]}</span>
+              <li key={r.id} className="px-2.5 py-2 rounded-lg hover:bg-surface-2 transition-colors group">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base shrink-0">{TYPE_ICON[r.type]}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-slate-200">{r.title}</span>
-                      {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-accent transition-colors"><ExternalLink size={11} /></a>}
-                      {studiedToday && <span className="text-xs text-green-400/70 flex items-center gap-0.5"><Flame size={10} />studied today</span>}
+                      <span className="text-sm font-medium text-slate-200 truncate">{r.title}</span>
+                      {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-accent transition-colors shrink-0"><ExternalLink size={11} /></a>}
+                      {studiedToday && <span className="text-xs text-green-400/70 flex items-center gap-0.5 shrink-0"><Flame size={10} />studied today</span>}
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <select value={r.status} onChange={e => handleStatus(r.id, e.target.value as ResourceStatus)}
                         className={`text-xs px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer font-medium ${cfg.color} ${cfg.bg}`}>
                         {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
                       </select>
                       <span className="text-xs text-slate-600">{r.category}</span>
+                      {r.status === 'in-progress' && (
+                        <span className="text-xs text-slate-500">{r.progress}%</span>
+                      )}
+                      <div className="flex items-center gap-2 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setShowLog(r)}
+                          className={`text-xs px-2 py-0.5 rounded-lg border transition-colors ${studiedToday ? 'border-green-500/30 text-green-400' : 'border-surface-3 text-slate-500 hover:text-slate-300 hover:border-slate-500'}`}>
+                          {studiedToday ? '✓ Logged' : '+ Log session'}
+                        </button>
+                        <button onClick={() => handleQuiz(r)} className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
+                          Quiz me
+                        </button>
+                        <button onClick={() => handleDelete(r.id)} className="text-slate-600 hover:text-red-400 transition-all">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                     {r.status === 'in-progress' && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input type="range" min={0} max={100} value={r.progress}
-                          onChange={e => handleProgress(r.id, parseInt(e.target.value))}
-                          className="flex-1 h-1 accent-violet-500" />
-                        <span className="text-xs text-slate-500 w-8 text-right">{r.progress}%</span>
-                      </div>
+                      <input type="range" min={0} max={100} value={r.progress}
+                        onChange={e => handleProgress(r.id, parseInt(e.target.value))}
+                        className="w-full h-1 mt-1.5 accent-violet-500" />
                     )}
-                    {r.status === 'completed' && (
-                      <div className="mt-1.5 h-1 bg-green-500/20 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full w-full" />
-                      </div>
-                    )}
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setShowLog(r)}
-                        className={`text-xs px-2 py-0.5 rounded-lg border transition-colors ${studiedToday ? 'border-green-500/30 text-green-400' : 'border-surface-3 text-slate-500 hover:text-slate-300 hover:border-slate-500'}`}>
-                        {studiedToday ? '✓ Logged' : '+ Log session'}
-                      </button>
-                      <button onClick={() => handleQuiz(r)} className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
-                        Quiz me
-                      </button>
-                    </div>
                   </div>
-                  <button onClick={() => handleDelete(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
-                    <Trash2 size={13} />
-                  </button>
                 </div>
               </li>
             )

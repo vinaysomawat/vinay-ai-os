@@ -58,24 +58,18 @@ export default function BotActivityCard({ botActivity, aiBudget }: {
         </div>
       ) : (
         <>
-          <ul className="space-y-px">
+          <ul>
             {shown.map((entry, i) => {
               const meta = MODULE_META[entry.module] ?? { label: entry.module, emoji: '🤖', color: 'text-slate-400', bg: 'bg-slate-500/10' }
               const firstLine = entry.response?.split('\n')[0]?.replace(/\*/g, '') ?? ''
               const timeAgo = formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })
               return (
-                <li key={i} className="flex items-start gap-3 py-2.5 border-b border-surface-3 last:border-0">
-                  <div className={`w-7 h-7 rounded-lg ${meta.bg} flex items-center justify-center shrink-0 mt-0.5 text-sm`}>
-                    {meta.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-xs font-semibold ${meta.color}`}>{meta.label}</span>
-                      <span className="text-xs text-slate-700">{timeAgo}</span>
-                    </div>
-                    <p className="text-sm text-slate-300 truncate">&ldquo;{entry.message}&rdquo;</p>
-                    {firstLine && <p className="text-xs text-slate-500 mt-0.5 truncate">{firstLine}</p>}
-                  </div>
+                <li key={i} className="flex items-center gap-2.5 py-1.5 border-b border-surface-3 last:border-0 text-xs hover:bg-surface-2/50 transition-colors">
+                  <span className="shrink-0">{meta.emoji}</span>
+                  <span className={`shrink-0 w-16 truncate font-medium ${meta.color}`}>{meta.label}</span>
+                  <span className="flex-1 min-w-0 truncate text-slate-300">{entry.message}</span>
+                  {firstLine && <span className="flex-1 min-w-0 truncate text-slate-600 hidden md:block">{firstLine}</span>}
+                  <span className="shrink-0 text-slate-700">{timeAgo}</span>
                 </li>
               )
             })}

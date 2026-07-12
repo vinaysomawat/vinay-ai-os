@@ -11,6 +11,7 @@ import {
   Code2,
   FileText,
   LayoutDashboard,
+  Settings,
   Cpu,
 } from 'lucide-react'
 import UserInfo from './UserInfo'
@@ -38,7 +39,7 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="hidden md:flex w-56 shrink-0 flex-col bg-surface-1 border-r border-surface-3">
+    <aside className="hidden md:flex w-48 shrink-0 flex-col bg-surface-1 border-r border-surface-3">
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-surface-3">
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent">
           <Cpu size={15} className="text-white" />
@@ -110,6 +111,17 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-3 py-3 border-t border-surface-3 space-y-2">
+        <Link
+          href="/settings"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            pathname === '/settings'
+              ? 'bg-accent/20 text-accent'
+              : 'text-slate-400 hover:bg-surface-2 hover:text-slate-200'
+          }`}
+        >
+          <Settings size={16} />
+          Settings
+        </Link>
         <UserInfo />
         <p className="text-xs text-slate-700 font-mono px-1">v{pkg.version}</p>
       </div>

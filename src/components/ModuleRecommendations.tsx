@@ -37,7 +37,7 @@ export default function ModuleRecommendations({ moduleLabel, context }: Props) {
       <button onClick={handleToggle} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-accent" />
-          <span className="text-sm font-medium text-slate-300">AI Recommendations</span>
+          <span className="text-sm font-medium text-slate-300">AI {moduleLabel} Advisor</span>
         </div>
         <div className="flex items-center gap-2">
           {loading && <span className="text-xs text-slate-500">Thinking...</span>}
