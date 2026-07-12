@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { sendMessage } from '@/lib/telegram/send'
 import { generateTrendingReadingForUser } from '@/features/trending/core'
+import { logCronRun } from '@/lib/cron-log'
 
 const CHAT_ID = process.env.TELEGRAM_ALLOWED_CHAT_ID!
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_CODING!
@@ -13,6 +14,7 @@ export async function GET(req: Request) {
   }
 
   const supabase = createServiceClient()
+  await logCronRun(supabase, 'trending-reading')
   const { data: users } = await supabase.auth.admin.listUsers()
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })

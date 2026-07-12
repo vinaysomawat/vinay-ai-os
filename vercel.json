@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/evening-checkin",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/cron-health-check",
+      "schedule": "0 4 * * *"
     }
   ]
 }

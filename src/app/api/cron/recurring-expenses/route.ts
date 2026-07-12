@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { logCronRun } from '@/lib/cron-log'
 
 export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
@@ -8,6 +9,7 @@ export async function GET(req: Request) {
   }
 
   const supabase = createServiceClient()
+  await logCronRun(supabase, 'recurring-expenses')
   const { data: users } = await supabase.auth.admin.listUsers()
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })

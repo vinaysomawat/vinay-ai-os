@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { generateDailyBriefing } from '@/features/ai/daily-briefing'
 import { getReminderLines } from '@/lib/reminders'
 import { sendMessage } from '@/lib/telegram/send'
+import { logCronRun } from '@/lib/cron-log'
 
 const CHAT_ID = process.env.TELEGRAM_ALLOWED_CHAT_ID!
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_PLANNER!
@@ -15,6 +16,7 @@ export async function GET(req: Request) {
   }
 
   const supabase = createServiceClient()
+  await logCronRun(supabase, 'daily-briefing')
 
   // Fetch the first user (single-user app)
   const { data: users } = await supabase.auth.admin.listUsers()

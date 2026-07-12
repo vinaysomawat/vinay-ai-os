@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { generateMonthlyDigest } from '@/features/ai/weekly-digest'
 import { sendMessage } from '@/lib/telegram/send'
+import { logCronRun } from '@/lib/cron-log'
 
 const CHAT_ID   = process.env.TELEGRAM_ALLOWED_CHAT_ID!
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_PLANNER!
@@ -16,12 +17,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const supabase = createServiceClient()
+  await logCronRun(supabase, 'monthly-digest')
+
   const todayIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
   if (todayIST.getUTCDate() !== 1) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'Not the 1st of the month (IST)' })
   }
 
-  const supabase = createServiceClient()
   const { data: users } = await supabase.auth.admin.listUsers()
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })

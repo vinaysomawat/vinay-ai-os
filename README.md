@@ -168,6 +168,8 @@ Any message the model can't confidently map to an action falls back to `{"action
 
 Defined in `vercel.json`, all protected by `Authorization: Bearer $CRON_SECRET`, all resolving the single app user via `supabase.auth.admin.listUsers()[0]` (single-user deployment). **If `CRON_SECRET` isn't actually set in the deployment's environment variables, every job below fires on schedule but is immediately rejected with 401 before any logic runs — silently, with no error surfaced anywhere in the app.** (This happened in production for an unknown period; fixed by setting the env var and redeploying. Worth spot-checking after any env var changes: `curl -H "Authorization: Bearer $CRON_SECRET" https://<deployment>/api/cron/<job>` should return `{"ok":true}`, not 401.)
 
+**Self-monitoring**: every job below calls `logCronRun(supabase, '<job-name>')` (`src/lib/cron-log.ts`) right after its auth check passes, writing a row to `cron_runs` — proof the route executed past `CRON_SECRET`, independent of whatever the rest of the job does. `cron-health-check` (below) reads that table daily and Telegram-alerts if any expected job hasn't logged a run in 24h, so a repeat of the `CRON_SECRET` outage gets caught within a day instead of going undiagnosed indefinitely.
+
 | Job | Schedule (UTC / IST) | Sends via | What it does |
 |---|---|---|---|
 | `daily-briefing` | `0 3 * * *` (~8:30am IST) | Planner bot | Recomputes today's Life Score vs. yesterday's, has Claude write a <120-word morning message, appends any active morning Reminders. Always sends. |
@@ -177,6 +179,7 @@ Defined in `vercel.json`, all protected by `Authorization: Bearer $CRON_SECRET`,
 | `evening-checkin` | `30 14 * * *` **and** `0 17 * * *` (8:00pm and 10:30pm IST — runs twice) | Planner bot | Checks for un-logged habits/tasks/expenses/metrics, an at-risk coding streak, and a still-open daily workout; appends any active evening Reminders; **only sends if something is actually outstanding**, otherwise stays silent. |
 | `weekly-digest` | `30 2 * * 0` (Sunday ~8am IST) | Planner bot | Averages the last 7 days of `life_score_logs` per module, identifies strongest/weakest module and best/worst day, has Claude write a 3-sentence review (<80 words), renders an ASCII progress-bar scorecard, and appends a deterministic category-wise weekly spend breakdown (highest-spend category first). |
 | `monthly-digest` | `40 2 * * *` (~8:10am IST, every day) | Planner bot | Same shape as `weekly-digest` but a 30-day window — runs daily like every other cron (Vercel Hobby only supports daily granularity) but self-gates to only actually send on the 1st of the month (IST); every other day it's a silent no-op. Also triggerable on demand via "how was my month". |
+| `cron-health-check` | `0 4 * * *` (~9:30am IST) | Planner bot | Reads `cron_runs` for the last 24h; if any of the 7 jobs above hasn't logged a run, sends a Telegram alert naming which ones. Silent (no message) when everything's healthy. |
 
 ## 12. AI Gateway
 
@@ -264,6 +267,7 @@ Standard pattern: `user_id uuid references auth.users` + 4 RLS policies (select/
 | `telegram_logs` | module, telegram_chat_id, message, action_taken (jsonb), response, created_at — **no `user_id`**; select policy is role-scoped (`auth.role() = 'authenticated'`), not owner-scoped |
 | `ai_cache` | cache_key (unique), response, model, expires_at — RLS enabled with **no policies** (service-role access only, by design) |
 | `ai_usage_logs` | task, model, input_tokens, output_tokens, estimated_cost_usd, cache_hit, created_at — select/insert-own only, no update/delete policies |
+| `cron_runs` | job, ok, detail, created_at — **no `user_id`**, global/system table; proof-of-execution log written by every cron route right after its `CRON_SECRET` check, read by `cron-health-check` (§11); select policy is role-scoped (`authenticated`), writes are service-role only |
 
 **Dropped tables** (existed at some point, since removed — mentioned here so their absence isn't mistaken for an oversight): `habits`, `habit_logs` (habit tracker retired), `projects` (manual project tracker retired in favor of GitHub-activity scoring), `focus_sessions` (deep-work tracking, removed days after being added).
 
