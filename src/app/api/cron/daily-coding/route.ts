@@ -19,15 +19,31 @@ export async function GET(req: Request) {
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })
 
+  const { data: settings } = await supabase.from('coding_settings').select('telegram_notify').eq('user_id', user.id).single()
+  if (settings?.telegram_notify === false) {
+    return NextResponse.json({ ok: true, notified: false })
+  }
+
   const assignment = await generateAssignmentForUser(supabase, user.id)
 
   if (assignment.length === 0) {
-    return NextResponse.json({ ok: true, message: 'No new questions today (revision day or empty pool)' })
-  }
+    // Revision day (or an exhausted pool) — still send something, so silence
+    // never reads as "did the alert fail?". Nudge toward unfinished questions.
+    const { data: incomplete } = await supabase
+      .from('coding_daily_questions')
+      .select('question:coding_questions(title, url, difficulty)')
+      .eq('user_id', user.id)
+      .eq('completed', false)
+      .order('assigned_date', { ascending: false })
+      .limit(3)
 
-  const { data: settings } = await supabase.from('coding_settings').select('telegram_notify').eq('user_id', user.id).single()
-  if (settings?.telegram_notify === false) {
-    return NextResponse.json({ ok: true, notified: false, count: assignment.length })
+    const rows = (incomplete ?? []) as unknown as { question: { title: string; url: string; difficulty: string } }[]
+    const body = rows.length > 0
+      ? `Catch up on what's still open:\n\n${rows.map(r => `${DIFFICULTY_EMOJI[r.question.difficulty] ?? ''} *${r.question.title}*\n${r.question.url}`).join('\n\n')}`
+      : `Nothing pending — review an old favorite or take the day off. 🎉`
+
+    await sendMessage(BOT_TOKEN, Number(CHAT_ID), `🧘 *No new question today — revision day*\n\n${body}`)
+    return NextResponse.json({ ok: true, notified: true, revisionDay: true })
   }
 
   const lines = assignment.map((a, i) => {

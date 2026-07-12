@@ -31,14 +31,16 @@ export interface CodingSettings {
   telegram_notify: boolean
 }
 
-// Weekday index (JS getDay(): 0=Sun...6=Sat) -> difficulty mix. Sunday is a revision day (no new questions).
+// Weekday index (JS getDay(): 0=Sun...6=Sat) -> difficulty mix. Sunday is a
+// revision day (no new questions). Every other day is capped at either one
+// medium/hard question, or two easy ones — never two medium/hard in a day.
 const ROTATION: Record<number, Difficulty[]> = {
   0: [],
-  1: ['easy'],
-  2: ['easy', 'medium'],
-  3: ['medium', 'medium'],
-  4: ['medium', 'hard'],
-  5: ['medium', 'medium'],
+  1: ['easy', 'easy'],
+  2: ['medium'],
+  3: ['medium'],
+  4: ['hard'],
+  5: ['medium'],
   6: ['hard'],
 }
 
