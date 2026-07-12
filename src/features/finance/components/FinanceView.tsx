@@ -6,7 +6,7 @@ import Card from '@/components/Card'
 import {
   addExpense, deleteExpense, upsertBudget,
   upsertProfile, addLoan, deleteLoan, updateLoanTerms,
-  addInvestment, updateInvestmentValue, updateInvestmentAmount, deleteInvestment,
+  addInvestment, updateInvestmentValue, updateInvestmentAmount, updateSipSettings, deleteInvestment,
   addGoal, updateGoalProgress, deleteGoal,
   addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense,
 } from '../actions'
@@ -83,6 +83,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+  const [addingSip, setAddingSip] = useState(false)
 
   // AI Advisor
   const [showAdvisor, setShowAdvisor] = useState(false)
@@ -113,6 +114,63 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
 
   const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
+  const sips = localInvestments.filter(i => i.is_sip)
+  const lumpSum = localInvestments.filter(i => !i.is_sip)
+  const renderInvestmentItem = (inv: Investment) => {
+    const pl = Number(inv.current_value) - Number(inv.invested_amount)
+    const plPct = Number(inv.invested_amount) > 0 ? (pl / Number(inv.invested_amount)) * 100 : 0
+    return (
+      <li key={inv.id} className="group">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${INVESTMENT_COLOR[inv.type as InvestmentType]}`}>
+                {INVESTMENT_TYPES.find(t => t.value === inv.type)?.label ?? inv.type}
+              </span>
+              <p className="text-sm text-slate-300 truncate">{inv.name}</p>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
+              <span className="text-slate-600 flex items-center gap-1">
+                invested
+                <InlineEdit
+                  value={String(inv.invested_amount)} prefix="₹" textSize="text-xs" inputWidth="w-24"
+                  onSave={v => handleInvAmountSave(inv.id, v)}
+                />
+              </span>
+              <span className="text-slate-300 font-medium flex items-center gap-1">
+                current
+                <InlineEdit
+                  value={String(inv.current_value)} prefix="₹" textSize="text-xs" inputWidth="w-24"
+                  onSave={v => handleInvValueSave(inv.id, v)}
+                />
+              </span>
+              {inv.is_sip && (
+                <span className="text-accent flex items-center gap-1 group/sip">
+                  <Repeat size={10} /> {fmt(Number(inv.sip_amount))}/mo · day {inv.sip_day_of_month}
+                  <button
+                    type="button" title="Cancel SIP (keeps the investment)"
+                    onClick={() => handleCancelSip(inv.id)}
+                    className="opacity-0 group-hover/sip:opacity-100 text-slate-600 hover:text-red-400 transition-all"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs font-medium ${pl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {pl >= 0 ? '+' : ''}{plPct.toFixed(1)}%
+            </span>
+            <button onClick={() => handleDeleteInvestment(inv.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+      </li>
+    )
+  }
+
   // Handlers
   const handleSalary = (v: string) => {
     const n = parseFloat(v) || 0
@@ -128,6 +186,11 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const handleDeleteInvestment = (id: string) => {
     setLocalInvestments(prev => prev.filter(i => i.id !== id))
     startTransition(() => deleteInvestment(id))
+  }
+
+  const handleCancelSip = (id: string) => {
+    setLocalInvestments(prev => prev.map(i => i.id === id ? { ...i, is_sip: false, sip_amount: null, sip_day_of_month: null } : i))
+    startTransition(() => updateSipSettings(id, null))
   }
 
   const handleInvValueSave = (id: string, v: string) => {
@@ -367,50 +430,20 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           {localInvestments.length === 0 ? (
             <p className="text-sm text-slate-600 text-center py-6">No investments added</p>
           ) : (
-            <ul className="space-y-3">
-              {localInvestments.map(inv => {
-                const pl = Number(inv.current_value) - Number(inv.invested_amount)
-                const plPct = Number(inv.invested_amount) > 0 ? (pl / Number(inv.invested_amount)) * 100 : 0
-                return (
-                  <li key={inv.id} className="group">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${INVESTMENT_COLOR[inv.type as InvestmentType]}`}>
-                            {INVESTMENT_TYPES.find(t => t.value === inv.type)?.label ?? inv.type}
-                          </span>
-                          <p className="text-sm text-slate-300 truncate">{inv.name}</p>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs">
-                          <span className="text-slate-600 flex items-center gap-1">
-                            invested
-                            <InlineEdit
-                              value={String(inv.invested_amount)} prefix="₹" textSize="text-xs" inputWidth="w-24"
-                              onSave={v => handleInvAmountSave(inv.id, v)}
-                            />
-                          </span>
-                          <span className="text-slate-300 font-medium flex items-center gap-1">
-                            current
-                            <InlineEdit
-                              value={String(inv.current_value)} prefix="₹" textSize="text-xs" inputWidth="w-24"
-                              onSave={v => handleInvValueSave(inv.id, v)}
-                            />
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-xs font-medium ${pl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {pl >= 0 ? '+' : ''}{plPct.toFixed(1)}%
-                        </span>
-                        <button onClick={() => handleDeleteInvestment(inv.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="space-y-4">
+              {sips.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Repeat size={11} /> SIPs</p>
+                  <ul className="space-y-3">{sips.map(inv => renderInvestmentItem(inv))}</ul>
+                </div>
+              )}
+              {lumpSum.length > 0 && (
+                <div>
+                  {sips.length > 0 && <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Lump Sum</p>}
+                  <ul className="space-y-3">{lumpSum.map(inv => renderInvestmentItem(inv))}</ul>
+                </div>
+              )}
+            </div>
           )}
         </Card>
       </div>
@@ -644,11 +677,20 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 const invested = parseFloat(fd.get('invested') as string)
                 const current = parseFloat(fd.get('current') as string)
                 const notes = fd.get('notes') as string || null
+                const sipAmount = addingSip ? parseFloat(fd.get('sipAmount') as string) : NaN
+                const sipDay = addingSip ? parseInt(fd.get('sipDay') as string, 10) : NaN
                 if (!name || !type || isNaN(invested)) return
-                const newInv = { id: `temp-${Date.now()}`, user_id: '', name, type, invested_amount: invested, current_value: current || invested, notes, updated_at: new Date().toISOString(), created_at: new Date().toISOString() }
+                if (addingSip && (isNaN(sipAmount) || isNaN(sipDay))) return
+                const sip = addingSip ? { amount: sipAmount, dayOfMonth: sipDay } : undefined
+                const newInv = {
+                  id: `temp-${Date.now()}`, user_id: '', name, type, invested_amount: invested, current_value: current || invested, notes,
+                  is_sip: !!sip, sip_amount: sip?.amount ?? null, sip_day_of_month: sip?.dayOfMonth ?? null, sip_last_contribution_month: null,
+                  updated_at: new Date().toISOString(), created_at: new Date().toISOString(),
+                }
                 setLocalInvestments(prev => [...prev, newInv])
                 setModal(null)
-                await addInvestment(name, type, invested, current || invested, notes)
+                setAddingSip(false)
+                await addInvestment(name, type, invested, current || invested, notes, sip)
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
@@ -670,8 +712,24 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                     <input name="current" type="number" placeholder="120000" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                   </div>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={addingSip} onChange={e => setAddingSip(e.target.checked)} className="accent-accent" />
+                  This is a SIP — auto-update invested amount monthly
+                </label>
+                {addingSip && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500 uppercase tracking-wider">Monthly SIP (₹)</label>
+                      <input name="sipAmount" type="number" placeholder="5000" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500 uppercase tracking-wider">Contribution day</label>
+                      <input name="sipDay" type="number" min={1} max={28} placeholder="5" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                  <button type="button" onClick={() => { setModal(null); setAddingSip(false) }} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
                   <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
                 </div>
               </form>

@@ -58,7 +58,8 @@ The richest module — full personal finance tracking, scoped to the **current c
 - **Budgets** — one amount per category per month (`upsert` on `user_id,category,month`).
 - **Finance profile** — `monthly_salary`, `emergency_fund_months`. Changing salary auto-appends a row to `salary_history` (`amount`, `effective_date`, `note`) so raises are tracked over time.
 - **Loans** — `name`, `principal`, `emi`, `interest_rate`, `remaining_months`, all **inline-editable** (EMI/rate/remaining-months can be updated in place without delete+recreate). Total remaining debt = `Σ emi × remaining_months`.
-- **Investments** — `name`, `type` (mutual_fund/stocks/fd/crypto/other), `invested_amount`, `current_value` (both inline-editable — `invested_amount` edits support SIP top-ups), `notes`. P&L = current − invested.
+- **Investments** — `name`, `type` (mutual_fund/stocks/fd/crypto/other), `invested_amount`, `current_value` (both inline-editable), `notes`. P&L = current − invested. Split into two sub-sections in the UI: **SIPs** and **Lump Sum**.
+- **SIPs** — a mode on the same investments row (`is_sip`, `sip_amount`, `sip_day_of_month` 1–28), not a separate table. A daily cron (§11) adds `sip_amount` to `invested_amount` on its due day each month, idempotently (`sip_last_contribution_month` watermark prevents double-applying if the cron fires twice) — deterministic, no AI. `current_value` is still manually edited (no market/NAV data source exists in the app). Cancel a SIP (keep the investment, stop auto-contributions) via the × next to its badge.
 - **Recurring expenses** — `name`, `amount`, `category`, `day_of_month` (1–28), `active`. A daily cron (§11) auto-posts each active template into `expenses` on its scheduled day, tagging the row `description: "{name} (recurring)"` with `recurring_expense_id` set, idempotently (won't double-post the same month). Pause/resume and delete from the UI.
 - **Financial goals** — `name`, `target_amount`, `current_amount`, `target_date`, `priority`. Add / update progress / delete.
 - **EMI is not double-counted**: `loans.emi` is purely informational (shown only in the "Total Debt" card) and is never added on top of logged expenses — if EMI is paid, it's expected to already appear as a regular (typically "Bills") expense, and spend totals reflect only actual logged `expenses` rows.
@@ -175,6 +176,7 @@ Defined in `vercel.json`, all protected by `Authorization: Bearer $CRON_SECRET`,
 | `daily-briefing` | `0 3 * * *` (~8:30am IST) | Planner bot | Recomputes today's Life Score vs. yesterday's, has Claude write a <120-word morning message, appends any active morning Reminders. Always sends. |
 | `daily-coding` | `5 3 * * *` (~8:35am IST) | Coding bot | Generates/fetches today's coding assignment; on a revision day, surfaces up to 3 incomplete past questions instead of going silent. Skipped if `coding_settings.telegram_notify = false`. |
 | `recurring-expenses` | `10 3 * * *` (~8:40am IST) | — (no message) | Auto-posts any active recurring-expense template due today into `expenses`, idempotently. Purely a DB write, silent by design. |
+| `sip-contribution` | `15 3 * * *` (~8:45am IST) | — (no message) | Adds `sip_amount` to `invested_amount` for any SIP due today, idempotently (`sip_last_contribution_month` watermark). Purely a DB write, silent by design. |
 | `trending-reading` | `20 3 * * *` (~8:50am IST) | Coding bot | Generates/fetches today's trending read and sends it. Skipped if `coding_settings.telegram_notify = false` or no matching story exists today. |
 | `evening-checkin` | `30 14 * * *` **and** `0 17 * * *` (8:00pm and 10:30pm IST — runs twice) | Planner bot | Checks for un-logged habits/tasks/expenses/metrics, an at-risk coding streak, and a still-open daily workout; appends any active evening Reminders; **only sends if something is actually outstanding**, otherwise stays silent. |
 | `weekly-digest` | `30 2 * * 0` (Sunday ~8am IST) | Planner bot | Averages the last 7 days of `life_score_logs` per module, identifies strongest/weakest module and best/worst day, has Claude write a 3-sentence review (<80 words), renders an ASCII progress-bar scorecard, and appends a deterministic category-wise weekly spend breakdown (highest-spend category first). |
@@ -247,7 +249,7 @@ Standard pattern: `user_id uuid references auth.users` + 4 RLS policies (select/
 | `finance_profile` | monthly_salary, emergency_fund_months (one row/user) |
 | `salary_history` | amount, effective_date, note — appended automatically on salary change |
 | `loans` | name, principal, emi, interest_rate, remaining_months |
-| `investments` | name, type, invested_amount, current_value, notes |
+| `investments` | name, type, invested_amount, current_value, notes, is_sip, sip_amount, sip_day_of_month (1–28), sip_last_contribution_month |
 | `financial_goals` | name, target_amount, current_amount, target_date, priority |
 | `health_metrics` | date, weight_kg, calories, protein_g, sleep_hours, steps, water_ml, recovery_score, notes (unique per user+date) |
 | `workouts` | date, type, duration_minutes, notes — ad-hoc log; auto-fed by the Daily Workout Planner on completion |

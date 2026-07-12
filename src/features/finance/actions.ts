@@ -99,11 +99,17 @@ export async function updateLoanTerms(id: string, updates: { emi?: number; inter
   revalidatePath('/finance')
 }
 
-export async function addInvestment(name: string, type: InvestmentType, investedAmount: number, currentValue: number, notes: string | null) {
+export async function addInvestment(
+  name: string, type: InvestmentType, investedAmount: number, currentValue: number, notes: string | null,
+  sip?: { amount: number; dayOfMonth: number }
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  const { error } = await supabase.from('investments').insert({ user_id: user.id, name, type, invested_amount: investedAmount, current_value: currentValue, notes })
+  const { error } = await supabase.from('investments').insert({
+    user_id: user.id, name, type, invested_amount: investedAmount, current_value: currentValue, notes,
+    is_sip: !!sip, sip_amount: sip?.amount ?? null, sip_day_of_month: sip?.dayOfMonth ?? null,
+  })
   if (error) throw new Error(error.message)
   revalidatePath('/finance')
 }
@@ -120,6 +126,17 @@ export async function updateInvestmentValue(id: string, currentValue: number) {
 export async function updateInvestmentAmount(id: string, investedAmount: number) {
   const supabase = await createClient()
   const { error } = await supabase.from('investments').update({ invested_amount: investedAmount, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
+// Turns an existing investment into a SIP (or edits/cancels one) without
+// needing to delete and re-add it. Passing null cancels the SIP.
+export async function updateSipSettings(id: string, sip: { amount: number; dayOfMonth: number } | null) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('investments').update({
+    is_sip: !!sip, sip_amount: sip?.amount ?? null, sip_day_of_month: sip?.dayOfMonth ?? null,
+  }).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/finance')
 }
