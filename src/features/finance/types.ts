@@ -62,6 +62,17 @@ export interface FinancialGoal {
   created_at: string
 }
 
+export interface RecurringExpense {
+  id: string
+  user_id: string
+  name: string
+  amount: number
+  category: string
+  day_of_month: number
+  active: boolean
+  created_at: string
+}
+
 export const CATEGORIES = [
   'Food', 'Transport', 'Housing', 'Health', 'Shopping',
   'Entertainment', 'Learning', 'Utilities', 'Other',

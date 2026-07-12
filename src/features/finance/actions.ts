@@ -15,9 +15,9 @@ export async function getFinanceData() {
   const startOfMonth = `${month}-01`
   const threeMonthsAgo = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
 
-  if (!user) return { expenses: [], budgets: [], profile: null, loans: [], investments: [], goals: [], avgMonthlyExpense: 0, month }
+  if (!user) return { expenses: [], budgets: [], profile: null, loans: [], investments: [], goals: [], recurringExpenses: [], avgMonthlyExpense: 0, month }
 
-  const [expensesRes, budgetsRes, profileRes, loansRes, investmentsRes, goalsRes, recentExpensesRes, salaryHistoryRes] = await Promise.all([
+  const [expensesRes, budgetsRes, profileRes, loansRes, investmentsRes, goalsRes, recentExpensesRes, salaryHistoryRes, recurringRes] = await Promise.all([
     supabase.from('expenses').select('*').eq('user_id', user.id).gte('date', startOfMonth).order('date', { ascending: false }),
     supabase.from('budgets').select('*').eq('user_id', user.id).eq('month', month),
     supabase.from('finance_profile').select('*').eq('user_id', user.id).single(),
@@ -26,6 +26,7 @@ export async function getFinanceData() {
     supabase.from('financial_goals').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
     supabase.from('expenses').select('amount').eq('user_id', user.id).gte('date', threeMonthsAgo),
     supabase.from('salary_history').select('amount, effective_date, note').eq('user_id', user.id).order('effective_date', { ascending: true }),
+    supabase.from('recurring_expenses').select('*').eq('user_id', user.id).order('day_of_month', { ascending: true }),
   ])
 
   const recentTotal = (recentExpensesRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0)
@@ -38,6 +39,7 @@ export async function getFinanceData() {
     loans: loansRes.data ?? [],
     investments: investmentsRes.data ?? [],
     goals: goalsRes.data ?? [],
+    recurringExpenses: recurringRes.data ?? [],
     salaryHistory: (salaryHistoryRes.data ?? []) as { amount: number; effective_date: string; note: string | null }[],
     avgMonthlyExpense,
     month,
@@ -179,6 +181,29 @@ export async function upsertBudget(category: string, amount: number) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
   const { error } = await supabase.from('budgets').upsert({ user_id: user.id, category, amount, month: currentMonth() }, { onConflict: 'user_id,category,month' })
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
+export async function addRecurringExpense(name: string, amount: number, category: string, dayOfMonth: number) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { error } = await supabase.from('recurring_expenses').insert({ user_id: user.id, name, amount, category, day_of_month: dayOfMonth })
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
+export async function toggleRecurringExpense(id: string, active: boolean) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('recurring_expenses').update({ active }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/finance')
+}
+
+export async function deleteRecurringExpense(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('recurring_expenses').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/finance')
 }

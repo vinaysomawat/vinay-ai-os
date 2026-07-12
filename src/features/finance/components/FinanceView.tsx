@@ -1,24 +1,25 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff, Repeat } from 'lucide-react'
 import Card from '@/components/Card'
 import {
   addExpense, deleteExpense, upsertBudget,
   upsertProfile, addLoan, deleteLoan, updateLoanTerms,
   addInvestment, updateInvestmentValue, updateInvestmentAmount, deleteInvestment,
   addGoal, updateGoalProgress, deleteGoal,
+  addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense,
 } from '../actions'
 import { askFinanceAdvisor } from '@/features/ai/finance-advisor'
 import { CATEGORIES, INVESTMENT_TYPES, INVESTMENT_COLOR } from '../types'
-import type { Expense, Budget, FinanceProfile, Loan, Investment, FinancialGoal, InvestmentType, GoalPriority } from '../types'
+import type { Expense, Budget, FinanceProfile, Loan, Investment, FinancialGoal, RecurringExpense, InvestmentType, GoalPriority } from '../types'
 
 const CATEGORY_COLOR: Record<string, string> = {
   Food: 'bg-orange-500/15 text-orange-400', Transport: 'bg-blue-500/15 text-blue-400',
   Housing: 'bg-purple-500/15 text-purple-400', Health: 'bg-red-500/15 text-red-400',
   Shopping: 'bg-pink-500/15 text-pink-400', Entertainment: 'bg-cyan-500/15 text-cyan-400',
   Learning: 'bg-green-500/15 text-green-400', Utilities: 'bg-amber-500/15 text-amber-400',
-  Other: 'bg-slate-500/15 text-slate-400', EMI: 'bg-red-500/15 text-red-400',
+  Other: 'bg-slate-500/15 text-slate-400',
 }
 
 const PRIORITY_COLOR: Record<GoalPriority, string> = {
@@ -56,11 +57,12 @@ interface Props {
   loans: Loan[]
   investments: Investment[]
   goals: FinancialGoal[]
+  recurringExpenses: RecurringExpense[]
   avgMonthlyExpense: number
   month: string
 }
 
-export default function FinanceView({ expenses, budgets, profile, loans, investments, goals, avgMonthlyExpense, month }: Props) {
+export default function FinanceView({ expenses, budgets, profile, loans, investments, goals, recurringExpenses, avgMonthlyExpense, month }: Props) {
   const [, startTransition] = useTransition()
   const [salaryVisible, setSalaryVisible] = useState(false)
 
@@ -71,9 +73,10 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const [localGoals, setLocalGoals] = useState(goals)
   const [localExpenses, setLocalExpenses] = useState(expenses)
   const [localBudgets, setLocalBudgets] = useState(budgets)
+  const [localRecurring, setLocalRecurring] = useState(recurringExpenses)
 
   // Modal state
-  const [modal, setModal] = useState<'loan' | 'investment' | 'goal' | 'expense' | null>(null)
+  const [modal, setModal] = useState<'loan' | 'investment' | 'goal' | 'expense' | 'recurring' | null>(null)
   const [editingBudget, setEditingBudget] = useState<string | null>(null)
   const [budgetInput, setBudgetInput] = useState('')
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
@@ -94,22 +97,17 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const netWorth = portfolio - totalDebt
   const totalSpent = localExpenses.reduce((s, e) => s + Number(e.amount), 0)
   const totalBudget = localBudgets.reduce((s, b) => s + Number(b.amount), 0)
-  // EMIs are a real monthly outflow but live in `loans`, not `expenses` — fold
-  // them in here so "left this month" isn't overstated.
-  const totalSpentWithEmi = totalSpent + totalEMIs
-  const remaining = totalBudget - totalSpentWithEmi
+  // EMI is already counted here if it's been logged as an expense (as it
+  // commonly is, e.g. a "Bills" entry) — don't also add loans.emi on top,
+  // that double-counts it. loans.emi is informational (see "Total Debt"
+  // above), not folded into spend.
+  const remaining = totalBudget - totalSpent
 
   const byCategory = CATEGORIES.map(cat => {
     const spent = localExpenses.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0)
     const budget = localBudgets.find(b => b.category === cat)?.amount ?? 0
     return { cat, spent, budget }
   }).filter(c => c.spent > 0 || c.budget > 0)
-
-  // Surfaced as its own row so EMI obligations are visibly counted alongside
-  // discretionary spend, not just silently folded into the "left" total.
-  const byCategoryWithEmi = totalEMIs > 0
-    ? [{ cat: 'EMI', spent: totalEMIs, budget: localBudgets.find(b => b.category === 'EMI')?.amount ?? 0 }, ...byCategory]
-    : byCategory
 
   const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
@@ -198,6 +196,16 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const handleDeleteExpense = (id: string) => {
     setLocalExpenses(prev => prev.filter(e => e.id !== id))
     startTransition(() => deleteExpense(id))
+  }
+
+  const handleToggleRecurring = (id: string, active: boolean) => {
+    setLocalRecurring(prev => prev.map(r => r.id === id ? { ...r, active } : r))
+    startTransition(() => toggleRecurringExpense(id, active))
+  }
+
+  const handleDeleteRecurring = (id: string) => {
+    setLocalRecurring(prev => prev.filter(r => r.id !== id))
+    startTransition(() => deleteRecurringExpense(id))
   }
 
   const handleAsk = async () => {
@@ -461,8 +469,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
         <Card title="By Category" action={<span className="text-xs text-slate-500">{monthLabel}</span>}>
           <div className="flex gap-3 mb-4">
             <div className="text-center">
-              <p className="text-lg font-bold text-red-400">{fmt(totalSpentWithEmi)}</p>
-              <p className="text-xs text-slate-600">Spent (incl. EMI)</p>
+              <p className="text-lg font-bold text-red-400">{fmt(totalSpent)}</p>
+              <p className="text-xs text-slate-600">Spent</p>
             </div>
             <div className="text-center">
               <p className="text-lg font-bold text-slate-400">{fmt(totalBudget)}</p>
@@ -473,11 +481,11 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
               <p className="text-xs text-slate-600">{remaining >= 0 ? 'Left' : 'Over'}</p>
             </div>
           </div>
-          {byCategoryWithEmi.length === 0 ? (
+          {byCategory.length === 0 ? (
             <p className="text-sm text-slate-600 text-center py-4">No expenses this month</p>
           ) : (
             <ul className="space-y-3">
-              {byCategoryWithEmi.map(({ cat, spent, budget }) => {
+              {byCategory.map(({ cat, spent, budget }) => {
                 const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0
                 const over = budget > 0 && spent > budget
                 return (
@@ -534,13 +542,44 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
         </Card>
       </div>
 
+      <Card title="Recurring Expenses" action={
+        <button onClick={() => setModal('recurring')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
+          <Plus size={12} /> Add
+        </button>
+      }>
+        <p className="text-xs text-slate-600 mb-3">Auto-logged into Expenses each month on its scheduled day — rent, subscriptions, and other fixed monthly costs you'd otherwise have to re-enter by hand.</p>
+        {localRecurring.length === 0 ? (
+          <p className="text-sm text-slate-600 text-center py-6">No recurring expenses set up</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {localRecurring.map(r => (
+              <li key={r.id} className={`flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group ${!r.active ? 'opacity-50' : ''}`}>
+                <Repeat size={14} className="text-accent shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_COLOR[r.category] ?? CATEGORY_COLOR.Other}`}>{r.category}</span>
+                    <span className="text-sm text-slate-300 truncate">{r.name}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">Day {r.day_of_month} of every month</p>
+                </div>
+                <span className="text-sm font-medium text-slate-300 shrink-0">{fmt(Number(r.amount))}</span>
+                <button onClick={() => handleToggleRecurring(r.id, !r.active)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                  {r.active ? 'Pause' : 'Resume'}
+                </button>
+                <button onClick={() => handleDeleteRecurring(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={13} /></button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {/* Modals */}
       {modal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">
-                {modal === 'loan' ? 'Add Loan' : modal === 'investment' ? 'Add Investment' : modal === 'goal' ? 'Add Goal' : 'Add Expense'}
+                {modal === 'loan' ? 'Add Loan' : modal === 'investment' ? 'Add Investment' : modal === 'goal' ? 'Add Goal' : modal === 'recurring' ? 'Add Recurring Expense' : 'Add Expense'}
               </h2>
               <button onClick={() => setModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
@@ -700,6 +739,49 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Description</label>
                   <input name="description" placeholder="Lunch, Uber, etc." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                </div>
+              </form>
+            )}
+
+            {modal === 'recurring' && (
+              <form className="space-y-3" onSubmit={async e => {
+                e.preventDefault()
+                const fd = new FormData(e.currentTarget)
+                const name = fd.get('name') as string
+                const amount = parseFloat(fd.get('amount') as string)
+                const category = fd.get('category') as string
+                const dayOfMonth = parseInt(fd.get('day') as string, 10)
+                if (!name || !amount || !dayOfMonth) return
+                const newRec: RecurringExpense = {
+                  id: `temp-${Date.now()}`, user_id: '', name, amount, category, day_of_month: dayOfMonth, active: true, created_at: new Date().toISOString(),
+                }
+                setLocalRecurring(prev => [...prev, newRec])
+                setModal(null)
+                await addRecurringExpense(name, amount, category, dayOfMonth)
+              }}>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Name *</label>
+                  <input name="name" required autoFocus placeholder="Rent" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 uppercase tracking-wider">Amount *</label>
+                    <input name="amount" type="number" required min="0" step="0.01" placeholder="15000" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 uppercase tracking-wider">Day of month *</label>
+                    <input name="day" type="number" required min="1" max="28" placeholder="1" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Category *</label>
+                  <select name="category" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
