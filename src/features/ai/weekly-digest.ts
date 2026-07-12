@@ -3,20 +3,43 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { askAI } from '@/lib/ai-gateway'
 
+// Deterministic — no AI. Highest-spend category first.
+function formatWeeklySpend(expenses: { amount: number; category: string }[]): string {
+  if (expenses.length === 0) return ''
+
+  const totalsByCategory = new Map<string, number>()
+  let total = 0
+  for (const e of expenses) {
+    const amt = Number(e.amount ?? 0)
+    total += amt
+    totalsByCategory.set(e.category, (totalsByCategory.get(e.category) ?? 0) + amt)
+  }
+
+  const lines = [...totalsByCategory.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, spent]) => `• ${cat}: ₹${Math.round(spent).toLocaleString('en-IN')}`)
+
+  return `\n\n💸 *This week's spend (₹${Math.round(total).toLocaleString('en-IN')} total):*\n${lines.join('\n')}`
+}
+
 // Shared by the weekly-digest cron job and the on-demand Telegram "digest"
 // action, so both surfaces compute and word the digest identically.
 export async function generateWeeklyDigest(db: SupabaseClient, userId: string): Promise<string> {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
 
-  const { data: logs } = await db
-    .from('life_score_logs')
-    .select('date, life_score, health_score, finance_score, career_score, learning_score, projects_score')
-    .eq('user_id', userId)
-    .gte('date', weekAgo)
-    .order('date', { ascending: true })
+  const [{ data: logs }, { data: expenses }] = await Promise.all([
+    db.from('life_score_logs')
+      .select('date, life_score, health_score, finance_score, career_score, learning_score, projects_score')
+      .eq('user_id', userId)
+      .gte('date', weekAgo)
+      .order('date', { ascending: true }),
+    db.from('expenses').select('amount, category').eq('user_id', userId).gte('date', weekAgo),
+  ])
+
+  const spendSection = formatWeeklySpend(expenses ?? [])
 
   if (!logs || logs.length === 0) {
-    return 'No data logged this week. Open your dashboard and start tracking!'
+    return `No data logged this week. Open your dashboard and start tracking!${spendSection}`
   }
 
   const avg = (key: string) => Math.round(logs.reduce((s: number, r: Record<string, unknown>) => s + (r[key] as number), 0) / logs.length)
@@ -61,5 +84,5 @@ Keep it personal, direct, under 80 words.`
     `Career   ${scoreBar(avgCareer)} ${avgCareer}\n` +
     `Learning ${scoreBar(avgLearning)} ${avgLearning}\n` +
     `Projects ${scoreBar(avgProjects)} ${avgProjects}\n\n` +
-    `${message}`
+    `${message}${spendSection}`
 }
