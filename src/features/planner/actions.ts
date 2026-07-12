@@ -61,8 +61,26 @@ export async function toggleTask(id: string, done: boolean) {
     .update({ completed: done, completed_at: done ? new Date().toISOString() : null })
     .eq('task_id', id)
 
+  // Same sync for the Daily Workout Planner — status is an enum here (not a
+  // plain boolean), so map done -> completed / pending. Completing also
+  // needs the fuller markWorkoutComplete logic (feeds the workouts log used
+  // by the Health Score, prunes history), so route through that instead of
+  // a raw status update — it's a harmless no-op re-write of tasks.done.
+  if (done) {
+    const { data: dw } = await supabase.from('daily_workouts').select('id').eq('task_id', id).in('status', ['pending', 'in_progress']).maybeSingle()
+    if (dw) {
+      const { markWorkoutComplete } = await import('@/features/health/workout-core')
+      await markWorkoutComplete(supabase, dw.id)
+    }
+  } else {
+    await supabase.from('daily_workouts')
+      .update({ status: 'pending', completed_at: null })
+      .eq('task_id', id).eq('status', 'completed')
+  }
+
   revalidatePath('/planner')
   revalidatePath('/coding')
+  revalidatePath('/health')
 }
 
 export async function deleteTask(id: string) {

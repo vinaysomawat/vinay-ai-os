@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getResourcesNeedingRevision } from '@/features/learning/calculations'
 import { getTodayAssignmentRows } from '@/features/coding/daily-core'
+import { getActiveWorkout } from '@/features/health/workout-core'
 import type { Resource, StudyLog } from '@/features/learning/types'
 
 export interface TopAction {
@@ -20,13 +21,14 @@ interface TopActionInput {
   todayMetric: Record<string, unknown> | null
   resourcesNeedingRevision: number
   codingQuestionPending: boolean
+  workoutPending: boolean
 }
 
 // Deterministic ranking — no AI call. Per Product Principles (CLAUDE.md):
 // "reduce decisions, don't just surface data" — surface the 3 highest-impact
 // actions instead of a wall of stat cards.
 function computeTopActions(input: TopActionInput): TopAction[] {
-  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending } = input
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, workoutPending } = input
   const candidates: (TopAction & { score: number })[] = []
 
   const overdue = pendingTasks.filter(t => t.due_date && t.due_date < today)
@@ -64,6 +66,10 @@ function computeTopActions(input: TopActionInput): TopAction[] {
 
   if (codingQuestionPending) {
     candidates.push({ score: 65, emoji: '💻', href: '/coding', text: 'Today\'s coding question is still open' })
+  }
+
+  if (workoutPending) {
+    candidates.push({ score: 60, emoji: '🏋️', href: '/health', text: 'Today\'s workout is still open' })
   }
 
   const metricsLoggedToday = !!todayMetric && ['weight_kg', 'calories', 'steps'].some(k => todayMetric[k] != null)
@@ -106,7 +112,7 @@ export async function getDashboardData() {
     tasksRes, appsRes, workoutsRes,
     expensesRes, budgetsRes, resourcesRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
-    aiUsageMonthRes, studyLogsRes, codingTodayRows,
+    aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
@@ -123,6 +129,7 @@ export async function getDashboardData() {
     supabase.from('ai_usage_logs').select('estimated_cost_usd, cache_hit, created_at').eq('user_id', user.id).gte('created_at', `${monthStart}T00:00:00.000Z`),
     supabase.from('study_logs').select('id, date, resource_id').eq('user_id', user.id).gte('date', studyLogsSince),
     getTodayAssignmentRows(supabase, user.id),
+    getActiveWorkout(supabase, user.id),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -317,9 +324,10 @@ export async function getDashboardData() {
   const studyLogs = (studyLogsRes.data ?? []) as StudyLog[]
   const resourcesNeedingRevision = getResourcesNeedingRevision(resources as Resource[], studyLogs).length
   const codingQuestionPending = codingTodayRows.length > 0 && codingTodayRows.some(r => !r.completed)
+  const workoutPending = !!activeWorkout
 
   const topActions = computeTopActions({
-    today, pendingTasks, applications, monthSpend, monthBudget, todayMetric,
+    today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, workoutPending,
     resourcesNeedingRevision, codingQuestionPending,
   })
 

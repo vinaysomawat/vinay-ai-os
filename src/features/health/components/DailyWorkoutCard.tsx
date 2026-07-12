@@ -1,0 +1,163 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { Flame, Trophy, ChevronDown, Play, CheckCircle2, SkipForward, Clock, Zap } from 'lucide-react'
+import { completeWorkout, skipWorkout, beginWorkout } from '../daily-workout'
+import type { DailyWorkout, WorkoutStats } from '../workout-core'
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: 'Pending', color: 'text-slate-400', bg: 'bg-slate-500/15' },
+  in_progress: { label: 'In Progress', color: 'text-amber-400', bg: 'bg-amber-500/15' },
+  completed: { label: 'Completed', color: 'text-green-400', bg: 'bg-green-500/15' },
+  skipped: { label: 'Skipped', color: 'text-slate-500', bg: 'bg-slate-500/15' },
+}
+
+interface Props {
+  initialWorkout: DailyWorkout | null
+  stats: WorkoutStats
+}
+
+export default function DailyWorkoutCard({ initialWorkout, stats }: Props) {
+  const [workout, setWorkout] = useState(initialWorkout)
+  const [showDetail, setShowDetail] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  if (!workout) {
+    return (
+      <div className="bg-surface-1 border border-surface-3 rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Today&apos;s Workout</h2>
+        <p className="text-sm text-slate-600 text-center py-6">No workout library found yet — run the pending migration to get started.</p>
+      </div>
+    )
+  }
+
+  const w = workout.workout
+  const status = STATUS_CONFIG[workout.status]
+
+  const handleStart = () => {
+    setWorkout(prev => prev ? { ...prev, status: 'in_progress' } : prev)
+    startTransition(async () => { await beginWorkout(workout.id) })
+  }
+  const handleComplete = () => {
+    setWorkout(prev => prev ? { ...prev, status: 'completed' } : prev)
+    startTransition(async () => { await completeWorkout(workout.id) })
+  }
+  const handleSkip = () => {
+    setWorkout(prev => prev ? { ...prev, status: 'skipped' } : prev)
+    startTransition(async () => { await skipWorkout(workout.id) })
+  }
+
+  const isDone = workout.status === 'completed' || workout.status === 'skipped'
+
+  return (
+    <div className="bg-surface-1 border border-surface-3 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Today&apos;s Workout</h2>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="flex items-center gap-1 text-amber-400"><Flame size={12} /> {stats.currentStreakDays}d streak</span>
+          <span className="flex items-center gap-1 text-slate-500"><Trophy size={12} /> {stats.totalCompleted} completed</span>
+        </div>
+      </div>
+
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.bg} ${status.color}`}>{status.label}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-accent/15 text-accent">{w.category}</span>
+          </div>
+          <p className={`text-base font-semibold ${isDone ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{w.name}</p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><Clock size={11} /> {w.duration_minutes} min</span>
+            <span className="flex items-center gap-1"><Zap size={11} /> ~{w.estimated_calories} kcal</span>
+            <span>{w.primary_muscles.join(', ')}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {workout.status === 'pending' && (
+            <button onClick={handleStart} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
+              <Play size={12} /> Start
+            </button>
+          )}
+          {!isDone && (
+            <>
+              <button onClick={handleComplete} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-600/80 disabled:opacity-50 transition-colors">
+                <CheckCircle2 size={12} /> Complete
+              </button>
+              <button onClick={handleSkip} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 border border-surface-3 text-slate-400 text-xs font-medium hover:bg-surface-3 disabled:opacity-50 transition-colors">
+                <SkipForward size={12} /> Skip
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <button onClick={() => setShowDetail(v => !v)} className="w-full flex items-center justify-center gap-1 mt-3 pt-3 border-t border-surface-3 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+        {showDetail ? 'Hide' : 'Show'} full workout <ChevronDown size={12} className={`transition-transform ${showDetail ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showDetail && (
+        <div className="mt-3 space-y-4 text-sm">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Warm-up</p>
+            <ul className="space-y-1">
+              {w.warmup.map((item, i) => <li key={i} className="text-slate-400 text-xs">• {item}</li>)}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Exercises</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-600 text-left">
+                    <th className="py-1 pr-2 font-medium">Exercise</th>
+                    <th className="py-1 px-2 font-medium">Sets</th>
+                    <th className="py-1 px-2 font-medium">Reps</th>
+                    <th className="py-1 px-2 font-medium">Rest</th>
+                    <th className="py-1 px-2 font-medium">RPE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {w.exercises.map((ex, i) => (
+                    <tr key={i} className="border-t border-surface-3">
+                      <td className="py-1.5 pr-2 text-slate-300">{ex.name}<p className="text-slate-600">{ex.notes}</p></td>
+                      <td className="py-1.5 px-2 text-slate-400">{ex.sets}</td>
+                      <td className="py-1.5 px-2 text-slate-400">{ex.reps}</td>
+                      <td className="py-1.5 px-2 text-slate-400">{ex.rest}</td>
+                      <td className="py-1.5 px-2 text-slate-400">{ex.rpe}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {w.cardio && (
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Cardio Finisher</p>
+              <p className="text-xs text-slate-400">{w.cardio.type} — {w.cardio.duration}, {w.cardio.intensity} ({w.cardio.targetHeartRateZone})</p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Cool-down</p>
+            <ul className="space-y-1">
+              {w.cooldown.map((item, i) => <li key={i} className="text-slate-400 text-xs">• {item}</li>)}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Coach Tips</p>
+            <ul className="space-y-1">
+              {w.coach_tips.map((tip, i) => <li key={i} className="text-xs text-accent/90">💡 {tip}</li>)}
+            </ul>
+          </div>
+
+          <div className="flex gap-1.5 flex-wrap">
+            {w.tags.map(tag => <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-slate-500">{tag}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

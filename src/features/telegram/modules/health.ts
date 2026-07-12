@@ -7,6 +7,9 @@ Actions:
 {"action":"log_metric","metric":"weight_kg|calories|protein_g|sleep_hours|steps|water_ml|recovery_score","value":number}
 {"action":"today_metrics"}
 {"action":"log_workout","workoutType":"Strength"|"Cardio"|"Run"|"Yoga"|"Sports"|"Other","minutes":number}
+{"action":"today_workout"}
+{"action":"complete_workout"}
+{"action":"skip_workout"}
 {"action":"plan"}
 {"action":"report"}
 {"action":"help"}
@@ -21,7 +24,10 @@ Rules for log_metric:
 - "feeling recovered, 4/5" or "recovery 3" → {"action":"log_metric","metric":"recovery_score","value":3} (scale 1-5)
 
 Rules for workouts:
-- "did 45 min strength training", "went for a 30 min run", "I ran", "meditated for 20 min" → log_workout
+- "did 45 min strength training", "went for a 30 min run", "I ran", "meditated for 20 min" → log_workout (a quick ad-hoc log, separate from the structured daily workout plan below)
+- "today's workout", "what's my workout", "workout plan" → today_workout
+- "finished my workout", "done with the workout", "completed today's session" → complete_workout
+- "skip today's workout", "not training today", "skip workout" → skip_workout
 - For "what should I do today", "today's plan", "am I on track" → plan
 - For "how was my week", "weekly report" → report
 
@@ -77,6 +83,33 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
       return `🏋️ Logged *${workoutType}*${minutes ? ` — ${minutes} min` : ''}`
     }
 
+    case 'today_workout': {
+      const { generateWorkoutForUser } = await import('@/features/health/workout-core')
+      const workout = await generateWorkoutForUser(db, userId)
+      if (!workout) return `🏋️ No workout library found — run the pending migration first.`
+      const w = workout.workout
+      const statusEmoji = workout.status === 'completed' ? '✅' : workout.status === 'skipped' ? '⏭️' : '🏋️'
+      return `${statusEmoji} *Today's Workout — ${w.name}*\n\n` +
+        `${w.category} · ${w.duration_minutes} min · ~${w.estimated_calories} kcal\n` +
+        `Primary: ${w.primary_muscles.join(', ')}\n\n` +
+        `*Exercises:*\n${w.exercises.map(e => `• ${e.name} — ${e.sets}x${e.reps}`).join('\n')}\n\n` +
+        `_Full detail (warmup, cardio, coach tips) is on the Health page. Say "finished my workout" when done._`
+    }
+    case 'complete_workout': {
+      const { getActiveWorkout, markWorkoutComplete } = await import('@/features/health/workout-core')
+      const workout = await getActiveWorkout(db, userId)
+      if (!workout) return `❌ No active workout to complete — try "today's workout" first.`
+      await markWorkoutComplete(db, workout.id)
+      return `🎉 Nice work! Marked *${workout.workout.name}* as completed.`
+    }
+    case 'skip_workout': {
+      const { getActiveWorkout, markWorkoutSkipped } = await import('@/features/health/workout-core')
+      const workout = await getActiveWorkout(db, userId)
+      if (!workout) return `❌ No active workout to skip.`
+      await markWorkoutSkipped(db, workout.id)
+      return `⏭️ Skipped *${workout.workout.name}* — a new one will be picked next time you ask.`
+    }
+
     case 'plan': {
       const { computeHealthPlan } = await import('@/features/health/calculations')
       const { getDailyHealthPlan } = await import('@/features/ai/health-report')
@@ -109,7 +142,7 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
     default:
       return `*Health Bot — What I can do:*\n\n` +
         `📊 *Metrics:*\n• "weight 88kg"\n• "slept 7.5 hours"\n• "8000 steps"\n• "2000 calories"\n• "120g protein"\n• "2L water"\n• "recovery 4/5"\n• "today's metrics"\n\n` +
-        `🏋️ *Workouts:*\n• "did 45 min strength training"\n• "30 min run"\n\n` +
+        `🏋️ *Workouts:*\n• "did 45 min strength training"\n• "30 min run"\n• "today's workout"\n• "finished my workout"\n• "skip today's workout"\n\n` +
         `🎓 *Coaching:*\n• "what should I do today"\n• "how was my week"`
   }
 }

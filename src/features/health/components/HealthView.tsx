@@ -10,7 +10,9 @@ import { computeHealthPlan } from '../calculations'
 import HealthProfileForm from './HealthProfileForm'
 import HealthScoreHero from './HealthScoreHero'
 import TodaysPlanCard from './TodaysPlanCard'
+import DailyWorkoutCard from './DailyWorkoutCard'
 import type { HealthMetric, MetricField, HealthProfile, Workout } from '../types'
+import type { DailyWorkout, WorkoutStats } from '../workout-core'
 
 const METRICS: { field: MetricField; label: string; emoji: string; unit: string; decimals?: number }[] = [
   { field: 'weight_kg',      label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
@@ -85,11 +87,13 @@ interface Props {
   initialMetrics: HealthMetric[]
   initialProfile: HealthProfile | null
   initialWorkouts: Workout[]
+  initialDailyWorkout: DailyWorkout | null
+  workoutStats: WorkoutStats
 }
 
 const WORKOUT_TYPES = ['Strength', 'Cardio', 'Run', 'Yoga', 'Sports', 'Other']
 
-export default function HealthView({ initialMetrics, initialProfile, initialWorkouts }: Props) {
+export default function HealthView({ initialMetrics, initialProfile, initialWorkouts, initialDailyWorkout, workoutStats }: Props) {
   const [workoutType, setWorkoutType] = useState('Strength')
   const [workoutDuration, setWorkoutDuration] = useState('')
 
@@ -180,6 +184,8 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           <TodaysPlanCard profile={profile} plan={dailyTargets} todayMetric={todayMetric} score={healthScore} today={today} />
         )}
       </div>
+
+      <DailyWorkoutCard initialWorkout={initialDailyWorkout} stats={workoutStats} />
 
       {/* Health profile setup — only shown before a profile exists; once it does, the edit link lives on the Health Score card */}
       {!profile && (

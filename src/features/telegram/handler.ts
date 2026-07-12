@@ -95,6 +95,11 @@ async function handleCallbackQuery(moduleName: ModuleName, update: TelegramUpdat
     // Two-way sync with the Coding daily-question habit system, same as the web app's toggleTask
     await db.from('coding_daily_questions').update({ completed: true, completed_at: new Date().toISOString() }).eq('task_id', taskId)
     await db.from('trending_readings').update({ completed: true, completed_at: new Date().toISOString() }).eq('task_id', taskId)
+    const { data: dw } = await db.from('daily_workouts').select('id').eq('task_id', taskId).in('status', ['pending', 'in_progress']).maybeSingle()
+    if (dw) {
+      const { markWorkoutComplete } = await import('@/features/health/workout-core')
+      await markWorkoutComplete(db, dw.id)
+    }
     await answerCallbackQuery(token, cq.id, '✅ Marked done!')
     if (cq.message) await editMessageReplyMarkup(token, chatId, cq.message.message_id)
   } else {
