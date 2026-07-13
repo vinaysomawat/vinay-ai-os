@@ -1,5 +1,8 @@
 # Personal OS
 
+[![CI](https://github.com/vinaysomawat/personal-ai-os/actions/workflows/ci.yml/badge.svg)](https://github.com/vinaysomawat/personal-ai-os/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A personal, single-user AI Operating System: one Next.js app that tracks tasks, career, money, health, learning, coding practice, and a personal knowledge base — with Claude generating insight in every module, a per-module Telegram bot for hands-free logging (text, voice, or photo), scheduled proactive nudges, and a gamified "Life Score" that rolls all of it into one daily number.
 
 This document describes exactly what the app does today, module by module, field by field, formula by formula, so it can be pasted into a fresh AI chat and give that AI complete understanding of the system with no other context needed. It is kept current with every functional change (see `CLAUDE.md`'s post-task checklist).
