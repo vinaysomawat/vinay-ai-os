@@ -373,7 +373,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
             ) : quizItems.length === 0 ? (
               <div className="text-center py-8">
                 <BookOpen size={32} className="mx-auto text-slate-700 mb-2" />
-                <p className="text-sm text-slate-600">Couldn't generate questions. Try adding notes to this resource for better results.</p>
+                <p className="text-sm text-slate-600">Couldn&apos;t generate questions. Try adding notes to this resource for better results.</p>
               </div>
             ) : (
               <div className="space-y-3">

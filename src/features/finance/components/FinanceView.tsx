@@ -599,7 +599,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           <Plus size={12} /> Add
         </button>
       }>
-        <p className="text-xs text-slate-600 mb-3">Auto-logged into Expenses each month on its scheduled day — rent, subscriptions, and other fixed monthly costs you'd otherwise have to re-enter by hand.</p>
+        <p className="text-xs text-slate-600 mb-3">Auto-logged into Expenses each month on its scheduled day — rent, subscriptions, and other fixed monthly costs you&apos;d otherwise have to re-enter by hand.</p>
         {localRecurring.length === 0 ? (
           <p className="text-sm text-slate-600 text-center py-6">No recurring expenses set up</p>
         ) : (
