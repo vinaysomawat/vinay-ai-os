@@ -3,7 +3,7 @@ import type { ModuleReply } from '@/lib/telegram/types'
 import { generateAssignmentForUser, getTodayAssignmentRows } from '@/features/coding/daily-core'
 import { generateTrendingReadingForUser, markTrendingReadingComplete } from '@/features/trending/core'
 
-export const SYSTEM_PROMPT = `You are the Coding bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Coding bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"today_question"}

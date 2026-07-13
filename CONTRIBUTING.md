@@ -21,8 +21,8 @@ If you're unsure whether something fits, open an issue to discuss before writing
 ## Local setup
 
 ```bash
-git clone https://github.com/vinaysomawat/vinay-ai-os
-cd vinay-ai-os
+git clone https://github.com/vinaysomawat/personal-ai-os
+cd personal-ai-os
 npm install
 cp .env.example .env.local   # fill in your own Supabase project, Anthropic key, etc.
 ```

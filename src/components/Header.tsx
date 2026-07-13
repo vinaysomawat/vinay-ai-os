@@ -16,7 +16,7 @@ const titles: Record<string, string> = {
 
 export default function Header() {
   const pathname = usePathname()
-  const title = titles[pathname] ?? 'Vinay AI OS'
+  const title = titles[pathname] ?? 'Personal OS'
 
   return (
     <header className="flex items-center justify-between px-6 py-3.5 bg-surface-1 border-b border-surface-3 shrink-0">

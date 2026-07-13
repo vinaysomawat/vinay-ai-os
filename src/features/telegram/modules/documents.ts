@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Documents bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Documents bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"create_document","title":"title","content":"full content","tags":["tag1","tag2"]}

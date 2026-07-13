@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Learning bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Learning bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"add_resource","title":"name","type":"course"|"book"|"video"|"article"|"podcast","url":"https://... or null","category":"topic e.g. JavaScript","status":"not-started"|"in-progress"|"completed"}

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Planner bot for Vinay AI OS. Parse the user message and return ONLY a JSON action, nothing else.
+export const SYSTEM_PROMPT = `You are the Planner bot for Personal OS. Parse the user message and return ONLY a JSON action, nothing else.
 
 Actions:
 {"action":"add_task","text":"task text","priority":"high"|"medium"|"low","area":"General","due_date":"YYYY-MM-DD or null"}

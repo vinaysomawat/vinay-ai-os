@@ -1,4 +1,4 @@
-# Vinay AI OS
+# Personal OS
 
 A personal, single-user AI Operating System: one Next.js app that tracks tasks, career, money, health, learning, coding practice, and a personal knowledge base — with Claude generating insight in every module, a per-module Telegram bot for hands-free logging (text, voice, or photo), scheduled proactive nudges, and a gamified "Life Score" that rolls all of it into one daily number.
 

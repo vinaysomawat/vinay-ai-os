@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Career bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Career bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"add_application","company":"name","role":"job title","status":"applied"|"screening"|"interview"|"offer"|"rejected","notes":"optional notes","applied_at":"YYYY-MM-DD"}

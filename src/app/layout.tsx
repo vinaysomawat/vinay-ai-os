@@ -7,7 +7,7 @@ import BottomNav from '@/components/BottomNav'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 export const metadata: Metadata = {
-  title: 'Vinay AI OS',
+  title: 'Personal OS',
   description: 'Personal AI Operating System',
 }
 

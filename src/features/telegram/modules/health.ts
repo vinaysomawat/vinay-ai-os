@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Health bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Health bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"log_metric","metric":"weight_kg|calories|protein_g|sleep_hours|steps|water_ml|recovery_score","value":number}
@@ -37,7 +37,7 @@ Rules for workouts:
 
 Always return valid JSON only. No explanation.`
 
-export const VISION_PROMPT = `You are the Health bot for Vinay AI OS, looking at a photo of a meal. Estimate calories and protein as best you can — give a reasonable estimate, don't refuse just because it's approximate. Return ONLY a JSON array:
+export const VISION_PROMPT = `You are the Health bot for Personal OS, looking at a photo of a meal. Estimate calories and protein as best you can — give a reasonable estimate, don't refuse just because it's approximate. Return ONLY a JSON array:
 [{"action":"log_metric","metric":"calories","value":<number>},{"action":"log_metric","metric":"protein_g","value":<number>}]
 If the photo isn't food, return {"action":"help"}.`
 

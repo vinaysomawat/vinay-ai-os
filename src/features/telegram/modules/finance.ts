@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModuleReply } from '@/lib/telegram/types'
 
-export const SYSTEM_PROMPT = `You are the Finance bot for Vinay AI OS. Parse the user message and return ONLY a JSON action.
+export const SYSTEM_PROMPT = `You are the Finance bot for Personal OS. Parse the user message and return ONLY a JSON action.
 
 Actions:
 {"action":"add_expense","amount":500,"category":"Food"|"Transport"|"Housing"|"Health"|"Shopping"|"Entertainment"|"Learning"|"Utilities"|"EMIs"|"Bills"|"Other","description":"what it was for","date":"YYYY-MM-DD"}
@@ -32,7 +32,7 @@ Rules:
 - For "rent is X every month", "auto-log my EMI", "recurring expense of X" → add_recurring (default day_of_month: 1)
 - For "show my recurring expenses", "what auto-logs each month" → list_recurring`
 
-export const VISION_PROMPT = `You are the Finance bot for Vinay AI OS, looking at a photo of a receipt or bill. Read the total amount and pick the best category. Return ONLY a JSON action:
+export const VISION_PROMPT = `You are the Finance bot for Personal OS, looking at a photo of a receipt or bill. Read the total amount and pick the best category. Return ONLY a JSON action:
 {"action":"add_expense","amount":<number>,"category":"Food"|"Transport"|"Housing"|"Health"|"Shopping"|"Entertainment"|"Learning"|"Utilities"|"EMIs"|"Bills"|"Other","description":"merchant or item name","date":"YYYY-MM-DD"}
 Use today's date unless the receipt clearly shows a different one. If you cannot read a total amount, return {"action":"help"}.`
 

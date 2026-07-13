@@ -17,7 +17,7 @@ export default async function LoginPage({
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent mb-4">
             <span className="text-white font-bold text-xl">V</span>
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Vinay AI OS</h1>
+          <h1 className="text-xl font-semibold text-foreground">Personal OS</h1>
           <p className="text-sm text-slate-500 mt-1">Your personal AI operating system</p>
         </div>
 

@@ -44,7 +44,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent">
           <Cpu size={15} className="text-white" />
         </div>
-        <span className="text-sm font-semibold tracking-wide text-white">Vinay AI OS</span>
+        <span className="text-sm font-semibold tracking-wide text-white">Personal OS</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
