@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { login, signup } from './actions'
 
 export default async function LoginPage({
@@ -86,6 +87,12 @@ export default async function LoginPage({
               </button>
             </div>
           </form>
+        </div>
+
+        <div className="text-center mt-4">
+          <Link href="/self-host" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+            Not the owner? Set up your own instance →
+          </Link>
         </div>
       </div>
     </div>
