@@ -1,14 +1,13 @@
 import Link from 'next/link'
-import { login, signup } from './actions'
+import { login } from './actions'
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>
+  searchParams: Promise<{ error?: string }>
 }) {
   const params = await searchParams
   const error = params.error
-  const message = params.message
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -28,17 +27,6 @@ export default async function LoginPage({
             Invalid email or password.
           </div>
         )}
-        {error === 'signup_failed' && (
-          <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-            Signup failed. Try a stronger password (min 6 chars).
-          </div>
-        )}
-        {message === 'check_email' && (
-          <div className="mb-4 px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-400">
-            Check your email to confirm your account, then sign in.
-          </div>
-        )}
-
         {/* Form */}
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-6">
           <form className="space-y-4">
@@ -79,21 +67,19 @@ export default async function LoginPage({
               >
                 Sign in
               </button>
-              <button
-                formAction={signup}
-                className="flex-1 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm font-medium hover:bg-surface-3 transition-colors"
+              <Link
+                href="/self-host"
+                className="flex-1 py-2.5 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm font-medium hover:bg-surface-3 transition-colors text-center"
               >
-                Sign up
-              </button>
+                Not the owner? Build your own
+              </Link>
             </div>
           </form>
         </div>
 
-        <div className="text-center mt-4">
-          <Link href="/self-host" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-            Not the owner? Set up your own instance →
-          </Link>
-        </div>
+        <footer className="text-center mt-8 text-xs text-slate-600">
+          Made by Vinay, using Claude
+        </footer>
       </div>
     </div>
   )

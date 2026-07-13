@@ -68,6 +68,10 @@ export default function SelfHostPage() {
             ← Back to sign in
           </Link>
         </div>
+
+        <footer className="text-center mt-8 text-xs text-slate-600">
+          Made by Vinay, using Claude
+        </footer>
       </div>
     </div>
   )
