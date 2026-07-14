@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff, RotateCcw, Lightbulb } from 'lucide-react'
 import Card from '@/components/Card'
 import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import {
@@ -12,6 +12,7 @@ import {
 } from '../actions'
 import { askCareerMentor, generateInterviewQuestions } from '@/features/ai/career-mentor'
 import { getQAsNeedingRevision } from '../calculations'
+import { SUGGESTED_QUESTIONS } from '../suggested-questions'
 import type { Application, AppStatus, CareerProfile, Skill, InterviewQA, SkillLevel, Difficulty, ResumeVersion } from '../types'
 import { SKILL_CATEGORIES, SKILL_LEVEL_CONFIG, DIFFICULTY_CONFIG, QA_TOPICS } from '../types'
 
@@ -110,10 +111,17 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   // AI Generate
   const [genLoading, setGenLoading] = useState(false)
 
+  // Suggested questions
+  const [showSuggestedQuestions, setShowSuggestedQuestions] = useState(false)
+  const [addedSuggestedQuestions, setAddedSuggestedQuestions] = useState<Set<string>>(new Set())
+
   const counts = STATUSES.reduce((acc, s) => ({ ...acc, [s]: localApps.filter(a => a.status === s).length }), {} as Record<AppStatus, number>)
   const filtered = filterStatus === 'all' ? localApps : localApps.filter(a => a.status === filterStatus)
   const filteredQA = filterTopic === 'all' ? localQA : localQA.filter(q => q.topic === filterTopic)
   const needsRevisionQA = getQAsNeedingRevision(localQA)
+
+  const existingQuestions = new Set(localQA.map(q => q.question))
+  const suggestedQuestions = SUGGESTED_QUESTIONS.filter(s => !existingQuestions.has(s.question) && !addedSuggestedQuestions.has(s.question))
   const skillsByCategory = localSkills.reduce<Record<string, Skill[]>>((acc, s) => {
     acc[s.category] = [...(acc[s.category] ?? []), s]
     return acc
@@ -157,6 +165,15 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   const handleDeleteQA = (id: string) => {
     setLocalQA(prev => prev.filter(q => q.id !== id))
     startTransition(() => deleteInterviewQA(id))
+  }
+  const handleAddSuggestedQuestion = (s: typeof SUGGESTED_QUESTIONS[number]) => {
+    setAddedSuggestedQuestions(prev => new Set(prev).add(s.question))
+    const optimistic: InterviewQA = {
+      id: `temp-${Date.now()}`, user_id: '', question: s.question, answer: null,
+      topic: s.topic, difficulty: s.difficulty, created_at: new Date().toISOString(), last_reviewed_at: null,
+    }
+    setLocalQA(prev => [optimistic, ...prev])
+    startTransition(() => addInterviewQA(s.question, null, s.topic, s.difficulty))
   }
   const handleAnswerSave = (id: string) => {
     setLocalQA(prev => prev.map(q => q.id === id ? { ...q, answer: answerInput } : q))
@@ -329,6 +346,46 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
             ))}
           </ul>
         </Card>
+      )}
+
+      {/* Suggested questions — curated, not AI-generated (see suggested-questions.ts) */}
+      {suggestedQuestions.length > 0 && (
+        <div className="border border-surface-3 rounded-xl overflow-hidden">
+          <button onClick={() => setShowSuggestedQuestions(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
+            <div className="flex items-center gap-2">
+              <Lightbulb size={14} className="text-amber-400" />
+              <span className="text-sm font-medium text-slate-300">Suggested Questions</span>
+              <span className="text-xs text-slate-600">{suggestedQuestions.length} curated Staff-level prep questions</span>
+            </div>
+            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showSuggestedQuestions ? 'rotate-180' : ''}`} />
+          </button>
+          {showSuggestedQuestions && (
+            <div className="px-4 py-3 bg-surface-1 border-t border-surface-3">
+              {Object.entries(
+                suggestedQuestions.reduce<Record<string, typeof suggestedQuestions>>((acc, s) => {
+                  acc[s.topic] = [...(acc[s.topic] ?? []), s]
+                  return acc
+                }, {})
+              ).map(([topic, items]) => (
+                <div key={topic} className="mb-3 last:mb-0">
+                  <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5">{topic}</p>
+                  <ul className="space-y-1">
+                    {items.map(s => (
+                      <li key={s.question} className="flex items-center gap-2 py-1 group">
+                        <p className="flex-1 text-sm text-slate-300">{s.question}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_CONFIG[s.difficulty].color}`}>{DIFFICULTY_CONFIG[s.difficulty].label}</span>
+                        <button onClick={() => handleAddSuggestedQuestion(s)}
+                          className="shrink-0 text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
+                          + Add
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Interview Q&A Bank */}

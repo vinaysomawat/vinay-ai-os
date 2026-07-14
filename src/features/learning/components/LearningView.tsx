@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, Flame, BookOpen, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Flame, BookOpen, RotateCcw, Lightbulb } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addResource, updateResource, deleteResource, logStudySession } from '../actions'
 import { getDailyStudyPlan, generateResourceQuiz } from '@/features/ai/study-plan'
 import { getResourcesNeedingRevision, getStudyStreak } from '../calculations'
+import { SUGGESTED_RESOURCES } from '../suggested-resources'
 import type { Resource, ResourceStatus, ResourceType, StudyLog } from '../types'
 
 const TYPE_ICON: Record<ResourceType, string> = {
@@ -84,6 +85,10 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const [showLog, setShowLog] = useState<Resource | null>(null)
   const [logDuration, setLogDuration] = useState('30')
 
+  // Suggested resources
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [addedSuggestionUrls, setAddedSuggestionUrls] = useState<Set<string>>(new Set())
+
   const today = new Date().toISOString().split('T')[0]
   const streak = getStudyStreak(studyLogs)
   const weekMinutes = totalMinutesThisWeek(studyLogs)
@@ -92,6 +97,9 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const filtered = filter === 'all' ? resources : resources.filter(r => r.status === filter)
   const counts = STATUSES.reduce((acc, s) => ({ ...acc, [s]: resources.filter(r => r.status === s).length }), {} as Record<ResourceStatus, number>)
   const needsRevision = getResourcesNeedingRevision(resources, studyLogs)
+
+  const existingUrls = new Set(resources.map(r => r.url).filter(Boolean))
+  const suggestions = SUGGESTED_RESOURCES.filter(s => !existingUrls.has(s.url) && !addedSuggestionUrls.has(s.url))
 
   const handleStatus = (id: string, status: ResourceStatus) => {
     setResources(prev => prev.map(r => r.id === id ? { ...r, status, progress: status === 'completed' ? 100 : r.progress } : r))
@@ -106,6 +114,18 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const handleDelete = (id: string) => {
     setResources(prev => prev.filter(r => r.id !== id))
     startTransition(() => deleteResource(id))
+  }
+
+  const handleAddSuggestion = (s: typeof SUGGESTED_RESOURCES[number]) => {
+    setAddedSuggestionUrls(prev => new Set(prev).add(s.url))
+    const optimistic: Resource = {
+      id: `temp-${Date.now()}`, user_id: '', title: s.title, type: s.type, url: s.url,
+      category: s.category, status: 'not-started', progress: 0, notes: s.notes, created_at: new Date().toISOString(),
+    }
+    setResources(prev => [optimistic, ...prev])
+    const fd = new FormData()
+    fd.set('title', s.title); fd.set('type', s.type); fd.set('url', s.url); fd.set('category', s.category); fd.set('notes', s.notes)
+    startTransition(() => addResource(fd))
   }
 
   const handleLogSession = async (resource: Resource | null) => {
@@ -177,6 +197,51 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
             ))}
           </ul>
         </Card>
+      )}
+
+      {/* Suggested resources — curated, hand-verified, not AI-generated (see suggested-resources.ts) */}
+      {suggestions.length > 0 && (
+        <div className="border border-surface-3 rounded-xl overflow-hidden">
+          <button onClick={() => setShowSuggestions(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
+            <div className="flex items-center gap-2">
+              <Lightbulb size={14} className="text-amber-400" />
+              <span className="text-sm font-medium text-slate-300">Suggested Resources</span>
+              <span className="text-xs text-slate-600">{suggestions.length} curated frontend picks</span>
+            </div>
+            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showSuggestions ? 'rotate-180' : ''}`} />
+          </button>
+          {showSuggestions && (
+            <div className="px-4 py-3 bg-surface-1 border-t border-surface-3">
+              {Object.entries(
+                suggestions.reduce<Record<string, typeof suggestions>>((acc, s) => {
+                  acc[s.category] = [...(acc[s.category] ?? []), s]
+                  return acc
+                }, {})
+              ).map(([category, items]) => (
+                <div key={category} className="mb-3 last:mb-0">
+                  <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5">{category}</p>
+                  <ul className="space-y-1">
+                    {items.map(s => (
+                      <li key={s.url} className="flex items-start gap-2 py-1 group">
+                        <span className="text-base shrink-0">{TYPE_ICON[s.type]}</span>
+                        <div className="flex-1 min-w-0">
+                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-300 hover:text-accent transition-colors">
+                            {s.title}
+                          </a>
+                          <p className="text-xs text-slate-600 mt-0.5">{s.notes}</p>
+                        </div>
+                        <button onClick={() => handleAddSuggestion(s)}
+                          className="shrink-0 text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
+                          + Add
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Status filter + Resource list */}

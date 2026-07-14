@@ -55,6 +55,7 @@ Five sub-areas sharing one page:
 - **Skills** — `name`, `category` (Frontend/Backend/Testing/DevOps/Architecture/Soft Skills/Other), `level` (beginner→expert, click to cycle). Add / delete.
 - **Interview Q&A bank** — `question`, `answer`, `topic` (JS/TS/React/Angular/Node/Playwright/Testing/System Design/Behavioral/General), `difficulty`, `last_reviewed_at`. Add / edit answer / delete.
 - **Revision nudge ("what am I forgetting")** — deterministic, not AI: same 14-day idle rule as Learning's (§6) and Coding's (§7), applied to the whole Q&A bank (not filtered to one topic). `getQAsNeedingRevision` (`career/calculations.ts`) flags any item whose `last_reviewed_at` (or `created_at`, if never reviewed) is 14+ days old. A "Needs Revision" card surfaces these with a one-click "✓ Mark reviewed" action (also available inline when a Q&A row is expanded) — reviewing is a distinct, explicit action from editing the answer, so opening a row to fix a typo doesn't silently count as having studied it. Also feeds a Dashboard Today's Focus signal (`career.qa_needs_revision`, weight 42).
+- **Suggested Questions** — a curated, hand-written (not AI-generated) list of ~17 Staff-level prep questions across JavaScript/React/System Design/Behavioral (`career/suggested-questions.ts`), shown in a collapsible panel grouped by topic. Deduped against the existing bank by exact question text; "+ Add" inserts via the same `addInterviewQA` action with `answer: null` — you write your own answer rather than getting a canned one.
 - **Coding + Learning streaks → Career**: `getCareerData()` pulls the current Coding practice streak (`computeCodingStats` from `daily-core.ts`) and the current Learning study streak (`getStudyStreak` from `learning/calculations.ts`) and (a) shows `🔥 {N}-day coding streak` / `📚 {N}-day study streak` badges on the profile card (each only shown when its streak is `> 0`), and (b) folds both into the AI Career Mentor's context string — Product Principle 4 ("modules should connect") implemented via the shared signals pattern in `src/lib/signals.ts`.
 - **AI features** (no generic `ModuleRecommendations` widget here — replaced by a dedicated mentor):
   - **Career Mentor** — `askCareerMentor(question, context)` — free-form Q&A fed the full profile + skills-by-category + pipeline snapshot + coding streak + study streak; answers under 250 words with direct verdicts on role-readiness/salary; opened from the header trigger (see "AI advisor header architecture" under Architecture) with quick-prompt chips
@@ -111,6 +112,7 @@ Resource tracker: `title`, `type` (course/book/video/article/podcast), `url`, `c
 - **Revision nudge ("what am I forgetting")** — deterministic, not AI: a `Needs Revision` card surfaces any `completed` resource with no study-log activity in the last 14 days, with a one-click "+ Log session" action. Same rule is exposed via the Telegram bot ("what needs revision").
 - **Study Coach** (header advisor — see "AI advisor header architecture" under Architecture) — tabbed panel merging the generic recommendations widget with the AI daily study plan: given in-progress/not-started/completed counts and what's already been studied today, Claude proposes a "main focus" (60 min, references an actual resource by name), a "quick review" (15 min), and an optional stretch item — under 150 words; each tab lazy-fetches independently on first view
 - **AI resource quiz** — `generateResourceQuiz(title, category, type, notes)` generates 5 mixed conceptual/applied/comparison questions as JSON for self-testing, click-to-reveal in the UI; stays inline as a per-resource "Quiz me" button (tied to one resource row, not part of the header advisor)
+- **Suggested Resources** — a curated, hand-verified (every URL checked live before being added, not AI-generated — avoids the real risk of an LLM inventing plausible-but-fake links) list of ~12 frontend blog posts/articles across JS Deep Dive, React Fundamentals, Advanced React, System Design, and Performance (`learning/suggested-resources.ts`), shown in a collapsible panel grouped by category. Deduped against the user's existing resources by URL; "+ Add" inserts via the same `addResource` action.
 
 ## 7. Coding (`/coding`)
 
@@ -254,7 +256,7 @@ Standard pattern: `user_id uuid references auth.users` + 4 RLS policies (select/
 | `resume_versions` | name, content, url, notes, is_primary |
 | `career_profile` | current_role, current_company, current_salary, target_role, years_experience, bio (one row/user) |
 | `skills` | name, category, level |
-| `interview_qa` | question, answer, topic, difficulty |
+| `interview_qa` | question, answer, topic, difficulty, last_reviewed_at |
 | `expenses` | amount, category, description, date, recurring_expense_id |
 | `recurring_expenses` | name, amount, category, day_of_month (1–28), active |
 | `budgets` | category, amount, month (unique per user+category+month) |
