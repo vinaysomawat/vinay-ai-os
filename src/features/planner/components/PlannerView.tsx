@@ -47,6 +47,12 @@ export default function PlannerView({ initialTasks }: Props) {
   const overdue = pending.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0]).length
   const plannerContext = `Pending tasks: ${pending.length} (${highPriorityPending} high priority, ${overdue} overdue). Completed today/recently: ${done.length}. Task list: ${pending.slice(0, 10).map(t => `"${t.text}" (${t.priority}${t.due_date ? `, due ${t.due_date}` : ''})`).join('; ') || 'none'}.`
 
+  const byArea = pending.reduce<Record<string, number>>((acc, t) => {
+    acc[t.area] = (acc[t.area] ?? 0) + 1
+    return acc
+  }, {})
+  const areaEntries = Object.entries(byArea).sort((a, b) => b[1] - a[1])
+
   const handleAdd = () => {
     if (!input.trim()) return
     const text = input.trim()
@@ -92,19 +98,41 @@ export default function PlannerView({ initialTasks }: Props) {
         {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
       </p>
 
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
+          <span className="text-2xl font-bold text-slate-200">{pending.length}</span>
+          <span className="text-xs text-slate-500 mt-0.5">Pending</span>
+        </div>
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
+          <span className="text-2xl font-bold text-red-400">{highPriorityPending}</span>
+          <span className="text-xs text-slate-500 mt-0.5">High priority</span>
+        </div>
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
+          <span className="text-2xl font-bold text-amber-400">{overdue}</span>
+          <span className="text-xs text-slate-500 mt-0.5">Overdue</span>
+        </div>
+        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
+          <span className="text-2xl font-bold text-green-400">{done.length}</span>
+          <span className="text-xs text-slate-500 mt-0.5">Completed</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <Card
         title="Today's Tasks"
-        padding="p-3.5"
+        padding="p-3"
+        className="lg:col-span-3"
         action={<span className="text-xs text-slate-500">{pending.length} remaining</span>}
       >
-        {/* Add task row */}
-        <div className="flex gap-2 mb-3">
+        {/* Add task row — wraps on narrow viewports (iPhone 16 Pro: 393px) instead of clipping the recurrence select */}
+        <div className="flex flex-wrap gap-2 mb-2.5">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
             placeholder="Add a task..."
-            className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
+            className="flex-1 min-w-[140px] bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
           />
           <select
             value={priority}
@@ -140,7 +168,7 @@ export default function PlannerView({ initialTasks }: Props) {
         )}
         <ul className="space-y-1">
           {pending.map(task => (
-            <li key={task.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
+            <li key={task.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
               <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
                 <Circle size={16} className="text-slate-600 group-hover:text-accent transition-colors" />
               </button>
@@ -173,7 +201,7 @@ export default function PlannerView({ initialTasks }: Props) {
             </summary>
             <ul className="space-y-1 mt-2">
               {done.map(task => (
-                <li key={task.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
+                <li key={task.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
                   <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
                     <CheckCircle2 size={16} className="text-green-500" />
                   </button>
@@ -190,6 +218,22 @@ export default function PlannerView({ initialTasks }: Props) {
           </details>
         )}
       </Card>
+
+      <Card title="By Area" padding="p-3" className="lg:col-span-2">
+        {areaEntries.length === 0 ? (
+          <p className="text-sm text-slate-600 text-center py-6">No pending tasks</p>
+        ) : (
+          <ul className="space-y-0.5">
+            {areaEntries.map(([area, count]) => (
+              <li key={area} className="flex items-center gap-2 py-1">
+                <p className="flex-1 text-sm text-slate-300 truncate">{area}</p>
+                <span className="text-xs text-slate-500 bg-surface-2 rounded-full px-2 py-0.5 shrink-0">{count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      </div>
     </div>
   )
 }

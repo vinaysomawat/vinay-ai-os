@@ -173,6 +173,26 @@ export async function computeCodingStats(supabase: SupabaseClient, userId: strin
   return { currentStreak, longestStreak, totalSolved, easySolved, mediumSolved, hardSolved, completionRate }
 }
 
+// Auto-detected complement to the manual `needs_revision` toggle — same 14-day
+// idle rule as Learning's getResourcesNeedingRevision, adapted for the fact
+// that a question can be re-assigned and re-solved after the rotation pool
+// cycles (README §7), so multiple rows can share one question_id. Dedupe by
+// question_id and use each question's *latest* solve, not any historical row,
+// so a question re-solved recently doesn't stay flagged from an old row.
+export function getStaleRevisionCount(
+  rows: { question_id: string; completed: boolean; completed_at: string | null }[],
+  days = 14
+): number {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString()
+  const latestByQuestion = new Map<string, string>()
+  for (const r of rows) {
+    if (!r.completed || !r.completed_at) continue
+    const prev = latestByQuestion.get(r.question_id)
+    if (!prev || r.completed_at > prev) latestByQuestion.set(r.question_id, r.completed_at)
+  }
+  return [...latestByQuestion.values()].filter(d => d < cutoff).length
+}
+
 export interface CalendarDay {
   date: string
   status: 'solved' | 'partial' | 'missed' | 'none'

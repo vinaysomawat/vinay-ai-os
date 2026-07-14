@@ -67,7 +67,7 @@ function computeInsights(
     items.push('Log your steps and water today to boost Health Score')
   }
 
-  return items.slice(0, 5)
+  return items.slice(0, 6)
 }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
@@ -151,12 +151,12 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
       {/* Today's Focus + Insights side by side — both are short scannable lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Today's Focus" padding="p-3.5" action={<Target size={13} className="text-accent" />}>
+        <Card title="Today's Focus" padding="p-3" action={<Target size={13} className="text-accent" />}>
           {topActions.length > 0 ? (
-            <ul className="space-y-0.5">
+            <ul className="space-y-0">
               {topActions.map((action, i) => (
                 <li key={i}>
-                  <Link href={action.href} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-2 transition-colors group">
+                  <Link href={action.href} className="flex items-center gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-surface-2 transition-colors group">
                     <span className="text-lg shrink-0">{action.emoji}</span>
                     <p className="text-sm text-slate-300 flex-1">{action.text}</p>
                     <span className="text-xs text-slate-600 group-hover:text-accent transition-colors">→</span>
@@ -171,11 +171,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           )}
         </Card>
 
-        <Card title="Insights" action={<Lightbulb size={13} className="text-amber-400" />}>
+        <Card title="Insights" padding="p-3" action={<Lightbulb size={13} className="text-amber-400" />}>
           {insights.length > 0 ? (
-            <ul className="space-y-1">
+            <ul className="space-y-0.5">
               {insights.map((insight, i) => (
-                <li key={i} className="flex items-center gap-3 py-1 border-b border-surface-3 last:border-0">
+                <li key={i} className="flex items-center gap-3 py-0.5 border-b border-surface-3 last:border-0">
                   <div className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
                   <p className="text-sm text-slate-400">{insight}</p>
                 </li>

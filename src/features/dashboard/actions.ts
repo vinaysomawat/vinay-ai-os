@@ -2,14 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getResourcesNeedingRevision } from '@/features/learning/calculations'
-import { getTodayAssignmentRows } from '@/features/coding/daily-core'
+import { getTodayAssignmentRows, getStaleRevisionCount } from '@/features/coding/daily-core'
 import { getActiveWorkout } from '@/features/health/workout-core'
 import type { Resource, StudyLog } from '@/features/learning/types'
 import { rankSignals, type Signal } from '@/lib/signals'
 import { checkOverdueTasks, checkHighPriorityPending } from '@/features/planner/signals'
 import { checkInterviewStage } from '@/features/career/signals'
 import { checkBudget } from '@/features/finance/signals'
-import { checkQuestionPending } from '@/features/coding/signals'
+import { checkQuestionPending, checkStaleRevision } from '@/features/coding/signals'
 import { checkWorkoutPending, checkNoMetricsToday } from '@/features/health/signals'
 import { checkRevisionNeeded } from '@/features/learning/signals'
 
@@ -28,6 +28,7 @@ interface TopActionInput {
   todayMetric: Record<string, unknown> | null
   resourcesNeedingRevision: number
   codingQuestionPending: boolean
+  codingStaleRevisionCount: number
   workoutPending: boolean
 }
 
@@ -37,7 +38,7 @@ interface TopActionInput {
 // module's signals.ts (see src/lib/signals.ts) rather than being hand-rolled
 // here, so new modules can plug into Today's Focus without touching this file.
 function computeTopActions(input: TopActionInput): TopAction[] {
-  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, workoutPending } = input
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, workoutPending } = input
 
   const signals = [
     checkOverdueTasks(pendingTasks, today),
@@ -48,9 +49,10 @@ function computeTopActions(input: TopActionInput): TopAction[] {
     checkWorkoutPending(workoutPending),
     checkNoMetricsToday(todayMetric),
     checkRevisionNeeded(resourcesNeedingRevision),
+    checkStaleRevision(codingStaleRevisionCount),
   ].filter((s): s is Signal => s !== null)
 
-  return rankSignals(signals, 3).map(s => ({ emoji: s.emoji, text: s.message, href: s.href }))
+  return rankSignals(signals, 5).map(s => ({ emoji: s.emoji, text: s.message, href: s.href }))
 }
 
 export async function getDashboardData() {
@@ -80,6 +82,7 @@ export async function getDashboardData() {
     expensesRes, budgetsRes, resourcesRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
+    codingCompletionsRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
@@ -98,6 +101,7 @@ export async function getDashboardData() {
     getTodayAssignmentRows(supabase, user.id),
     getActiveWorkout(supabase, user.id),
     supabase.from('coding_daily_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', true).gte('assigned_date', since30),
+    supabase.from('coding_daily_questions').select('question_id, completed, completed_at').eq('user_id', user.id).eq('completed', true),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -279,11 +283,12 @@ export async function getDashboardData() {
   const studyLogs = (studyLogsRes.data ?? []) as StudyLog[]
   const resourcesNeedingRevision = getResourcesNeedingRevision(resources as Resource[], studyLogs).length
   const codingQuestionPending = codingTodayRows.length > 0 && codingTodayRows.some(r => !r.completed)
+  const codingStaleRevisionCount = getStaleRevisionCount(codingCompletionsRes.data ?? [])
   const workoutPending = !!activeWorkout
 
   const topActions = computeTopActions({
     today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, workoutPending,
-    resourcesNeedingRevision, codingQuestionPending,
+    resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount,
   })
 
   // Upsert XP record

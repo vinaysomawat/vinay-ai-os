@@ -12,6 +12,12 @@ Personal OS is a single-user AI Operating System — a Next.js 15 web app backed
 
 Before touching code for any non-trivial feature or fix, give a spec first: what's changing, why, the approach, and any tradeoffs — then wait for explicit go-ahead before writing code. Small, obvious one-line fixes (typos, single-value tweaks) don't need this.
 
+## UI/Design principles
+
+Build every screen like the best UI/UX designer in the world would: dense and compact, not airy. Minimize whitespace — padding, margins, gaps, empty card space. Utilize the full screen area; prefer showing more real information (more list items, more stats, tighter rows) over generous breathing room. This is a data-dense personal ops tool, not a marketing site — err toward density, not toward "clean minimal" spacing. Still keep text legible and touch targets usable; compact means tight spacing and small type sizes, not overlapping or unreadable elements.
+
+**Mobile target: iPhone 16 Pro** (393×852 CSS px, the `BottomNav` breakpoint). Any UI change must be checked at that viewport, not just desktop — no horizontal overflow, no clipped/overlapping elements, touch targets stay usable at that width.
+
 ## Stack
 
 - **Framework**: Next.js 15 App Router (TypeScript)
