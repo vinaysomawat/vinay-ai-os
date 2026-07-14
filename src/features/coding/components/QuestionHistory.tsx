@@ -16,7 +16,7 @@ type Filter = 'all' | 'completed' | 'pending' | 'revision' | 'favorites' | 'easy
 
 export default function QuestionHistory({ initialHistory }: { initialHistory: DailyQuestion[] }) {
   const [history, setHistory] = useState(initialHistory)
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('pending')
   const [, startTransition] = useTransition()
 
   const filtered = history.filter(h => {
