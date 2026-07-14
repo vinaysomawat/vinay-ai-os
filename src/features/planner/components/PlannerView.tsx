@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, CheckCircle2, Circle, Trash2 } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, Sparkles } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
+import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addTask, toggleTask, deleteTask } from '../actions'
 import { RefreshCw } from 'lucide-react'
 import type { Task, Priority, Recurrence } from '../types'
@@ -90,10 +91,14 @@ export default function PlannerView({ initialTasks }: Props) {
     })
   }
 
+  const advisorOpen = useAIAdvisorOpen()
+  const advisorPortal = useAIAdvisor('Plan Coach', Sparkles, (
+    <ModuleRecommendations moduleLabel="Planner" context={plannerContext} isOpen={advisorOpen} />
+  ))
+
   return (
     <div className="space-y-4">
-      <ModuleRecommendations moduleLabel="Planner" context={plannerContext} />
-
+      {advisorPortal}
       <p className="text-xs text-slate-500 uppercase tracking-widest px-0.5">
         {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
       </p>

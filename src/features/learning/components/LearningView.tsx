@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Flame, BookOpen, RotateCcw } from 'lucide-react'
+import { useState, useEffect, useTransition } from 'react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, Flame, BookOpen, RotateCcw } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
+import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addResource, updateResource, deleteResource, logStudySession } from '../actions'
 import { getDailyStudyPlan, generateResourceQuiz } from '@/features/ai/study-plan'
 import { getResourcesNeedingRevision, getStudyStreak } from '../calculations'
@@ -25,6 +26,40 @@ function totalMinutesThisWeek(logs: StudyLog[]): number {
   return logs.filter(l => l.date >= since).reduce((s, l) => s + l.duration_minutes, 0)
 }
 
+// Merges the generic recommendations widget + the daily study plan into one
+// tabbed panel registered as the "Study Coach" advisor (see AIAdvisorProvider).
+function StudyCoachContent({ isOpen, context, resources, studyLogs }: { isOpen: boolean; context: string; resources: Resource[]; studyLogs: StudyLog[] }) {
+  const [tab, setTab] = useState<'recommendations' | 'plan'>('recommendations')
+  const [plan, setPlan] = useState<string | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && tab === 'plan' && !plan && !planLoading) {
+      setPlanLoading(true)
+      getDailyStudyPlan(resources, studyLogs).then(setPlan).finally(() => setPlanLoading(false))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tab])
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-3 bg-surface-2 rounded-lg p-0.5">
+        <button onClick={() => setTab('recommendations')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${tab === 'recommendations' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Recommendations</button>
+        <button onClick={() => setTab('plan')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${tab === 'plan' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Daily Plan</button>
+      </div>
+      {tab === 'recommendations' ? (
+        <ModuleRecommendations moduleLabel="Learning" context={context} isOpen={isOpen && tab === 'recommendations'} />
+      ) : planLoading ? (
+        <div className="space-y-2">
+          {[85, 70, 90, 60, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
+        </div>
+      ) : plan ? (
+        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{plan}</p>
+      ) : null}
+    </div>
+  )
+}
+
 interface QuizItem { question: string; answer: string }
 
 interface Props {
@@ -38,11 +73,6 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const [studyLogs, setStudyLogs] = useState(initialStudyLogs)
   const [filter, setFilter] = useState<ResourceStatus | 'all'>('all')
   const [showForm, setShowForm] = useState(false)
-
-  // AI Study Plan
-  const [showPlan, setShowPlan] = useState(false)
-  const [plan, setPlan] = useState<string | null>(null)
-  const [planLoading, setPlanLoading] = useState(false)
 
   // Quiz
   const [quizResource, setQuizResource] = useState<Resource | null>(null)
@@ -89,16 +119,6 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
     await logStudySession(resource?.id ?? null, duration, null)
   }
 
-  const handlePlan = async () => {
-    if (planLoading) return
-    if (showPlan && plan) { setShowPlan(false); return }
-    setShowPlan(true); setPlanLoading(true)
-    try {
-      const result = await getDailyStudyPlan(resources, studyLogs)
-      setPlan(result)
-    } finally { setPlanLoading(false) }
-  }
-
   const handleQuiz = async (resource: Resource) => {
     setQuizResource(resource); setQuizItems([]); setRevealed(new Set()); setQuizLoading(true)
     try {
@@ -107,35 +127,16 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
     } finally { setQuizLoading(false) }
   }
 
+  const learningContext = `Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${streak} days. Minutes studied this week: ${weekMinutes}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`
+
+  const advisorOpen = useAIAdvisorOpen()
+  const advisorPortal = useAIAdvisor('Study Coach', Sparkles, (
+    <StudyCoachContent isOpen={advisorOpen} context={learningContext} resources={resources} studyLogs={studyLogs} />
+  ))
+
   return (
     <div className="space-y-5">
-      {/* AI Advisor + Daily Plan side by side — each collapsed by default, so paired horizontally instead of stacked to halve the vertical footprint */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <ModuleRecommendations moduleLabel="Learning" context={`Resources tracked: ${resources.length} (${STATUSES.map(s => `${counts[s]} ${STATUS_CONFIG[s].label.toLowerCase()}`).join(', ')}). Study streak: ${getStudyStreak(studyLogs)} days. Minutes studied this week: ${totalMinutesThisWeek(studyLogs)}. In-progress resources: ${resources.filter(r => r.status === 'in-progress').map(r => r.title).join(', ') || 'none'}. Needs revision (completed, no activity in 14+ days): ${needsRevision.map(r => r.title).join(', ') || 'none'}.`} />
-
-        <div className="border border-surface-3 rounded-xl overflow-hidden">
-          <button onClick={handlePlan} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-accent" />
-              <span className="text-sm font-medium text-slate-300">AI Daily Study Plan</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {planLoading && <span className="text-xs text-slate-500">Generating...</span>}
-              <ChevronDown size={14} className={`text-slate-500 transition-transform ${showPlan ? 'rotate-180' : ''}`} />
-            </div>
-          </button>
-          {showPlan && (
-            <div className="px-4 py-4 bg-surface-1 border-t border-surface-3">
-              {planLoading
-                ? <div className="space-y-2">{[85, 70, 90, 60, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>
-                : plan
-                  ? <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{plan}</p>
-                  : null}
-            </div>
-          )}
-        </div>
-      </div>
-
+      {advisorPortal}
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">

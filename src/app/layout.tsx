@@ -5,6 +5,7 @@ import Header from '@/components/Header'
 import QuickAdd from '@/features/dashboard/components/QuickAdd'
 import BottomNav from '@/components/BottomNav'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AIAdvisorProvider } from '@/components/AIAdvisorProvider'
 
 export const metadata: Metadata = {
   title: 'Personal OS',
@@ -24,13 +25,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="flex h-screen overflow-hidden bg-background">
         <TooltipProvider>
-          <Sidebar />
-          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-            <Header />
-            <main className="flex-1 min-w-0 overflow-y-auto p-6 pb-20 md:pb-6 animate-in fade-in duration-200">{children}</main>
-          </div>
-          <QuickAdd />
-          <BottomNav />
+          <AIAdvisorProvider>
+            <Sidebar />
+            <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+              <Header />
+              <main className="flex-1 min-w-0 overflow-y-auto p-6 pb-20 md:pb-6 animate-in fade-in duration-200">{children}</main>
+            </div>
+            <QuickAdd />
+            <BottomNav />
+          </AIAdvisorProvider>
         </TooltipProvider>
       </body>
     </html>

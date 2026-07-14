@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, X, Sparkles, ChevronDown, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff, Repeat } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff, Repeat } from 'lucide-react'
 import Card from '@/components/Card'
+import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import {
   addExpense, deleteExpense, upsertBudget,
   upsertProfile, addLoan, deleteLoan, updateLoanTerms,
@@ -86,7 +87,6 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const [addingSip, setAddingSip] = useState(false)
 
   // AI Advisor
-  const [showAdvisor, setShowAdvisor] = useState(false)
   const [aiQuestion, setAiQuestion] = useState('')
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -286,47 +286,37 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
     } finally { setAiLoading(false) }
   }
 
+  const advisorPortal = useAIAdvisor('Money Advisor', Sparkles, (
+    <div className="space-y-3">
+      <div className="flex gap-2 flex-wrap text-xs text-slate-600">
+        {['Can I afford a car?', 'Should I prepay my loan?', 'How much should I invest?', 'When can I retire?'].map(q => (
+          <button key={q} onClick={() => setAiQuestion(q)} className="px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={aiQuestion}
+          onChange={e => setAiQuestion(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAsk()}
+          placeholder="Ask about your finances..."
+          className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
+        />
+        <button onClick={handleAsk} disabled={aiLoading || !aiQuestion.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
+          {aiLoading ? '...' : 'Ask'}
+        </button>
+      </div>
+      {aiLoading && (
+        <div className="space-y-2">
+          {[90, 75, 80].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
+        </div>
+      )}
+      {aiAnswer && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{aiAnswer}</p>}
+    </div>
+  ))
+
   return (
     <div className="space-y-5">
-      {/* AI Finance Advisor */}
-      <div className="border border-surface-3 rounded-xl overflow-hidden">
-        <button onClick={() => setShowAdvisor(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <span className="text-sm font-medium text-slate-300">AI Finance Advisor</span>
-            <span className="text-xs text-slate-600">Ask anything about your money</span>
-          </div>
-          <ChevronDown size={14} className={`text-slate-500 transition-transform ${showAdvisor ? 'rotate-180' : ''}`} />
-        </button>
-        {showAdvisor && (
-          <div className="px-4 py-4 bg-surface-1 border-t border-surface-3 space-y-3">
-            <div className="flex gap-2 flex-wrap text-xs text-slate-600">
-              {['Can I afford a car?', 'Should I prepay my loan?', 'How much should I invest?', 'When can I retire?'].map(q => (
-                <button key={q} onClick={() => setAiQuestion(q)} className="px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={aiQuestion}
-                onChange={e => setAiQuestion(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAsk()}
-                placeholder="Ask about your finances..."
-                className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
-              />
-              <button onClick={handleAsk} disabled={aiLoading || !aiQuestion.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
-                {aiLoading ? '...' : 'Ask'}
-              </button>
-            </div>
-            {aiLoading && (
-              <div className="space-y-2">
-                {[90, 75, 80].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
-              </div>
-            )}
-            {aiAnswer && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{aiAnswer}</p>}
-          </div>
-        )}
-      </div>
-
+      {advisorPortal}
       {/* Net Worth Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4">

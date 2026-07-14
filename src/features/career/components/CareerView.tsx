@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronDown, ChevronRight, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff } from 'lucide-react'
 import Card from '@/components/Card'
+import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import {
   addApplication, updateStatus, deleteApplication,
   upsertCareerProfile, addSkill, updateSkillLevel, deleteSkill,
@@ -101,7 +102,6 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   const [answerInput, setAnswerInput] = useState('')
 
   // AI Mentor
-  const [showMentor, setShowMentor] = useState(false)
   const [mentorQ, setMentorQ] = useState('')
   const [mentorA, setMentorA] = useState<string | null>(null)
   const [mentorLoading, setMentorLoading] = useState(false)
@@ -193,8 +193,28 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
     'What are my biggest career gaps?',
   ]
 
+  const advisorPortal = useAIAdvisor('Career Mentor', Sparkles, (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {QUICK_PROMPTS.map(q => (
+          <button key={q} onClick={() => setMentorQ(q)} className="text-xs text-slate-600 px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={mentorQ} onChange={e => setMentorQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAsk()}
+          placeholder="Am I ready for a promotion? What should I learn next?" className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+        <button onClick={handleAsk} disabled={mentorLoading || !mentorQ.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
+          {mentorLoading ? '...' : 'Ask'}
+        </button>
+      </div>
+      {mentorLoading && <div className="space-y-2">{[85, 70, 90, 60].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>}
+      {mentorA && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{mentorA}</p>}
+    </div>
+  ))
+
   return (
     <div className="space-y-5">
+      {advisorPortal}
       {/* Career Profile */}
       <Card title="Career Profile" action={
         (codingStreak > 0 || studyStreak > 0)
@@ -214,36 +234,6 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           <ProfileField label="Bio / Focus" value={localProfile?.bio ?? ''} onSave={v => saveProfile('bio', v)} placeholder="Frontend + Testing specialist" />
         </div>
       </Card>
-
-      {/* AI Career Mentor */}
-      <div className="border border-surface-3 rounded-xl overflow-hidden">
-        <button onClick={() => setShowMentor(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <span className="text-sm font-medium text-slate-300">AI Career Mentor</span>
-            <span className="text-xs text-slate-600">Ask anything about your career</span>
-          </div>
-          <ChevronDown size={14} className={`text-slate-500 transition-transform ${showMentor ? 'rotate-180' : ''}`} />
-        </button>
-        {showMentor && (
-          <div className="px-4 py-4 bg-surface-1 border-t border-surface-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {QUICK_PROMPTS.map(q => (
-                <button key={q} onClick={() => setMentorQ(q)} className="text-xs text-slate-600 px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input value={mentorQ} onChange={e => setMentorQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAsk()}
-                placeholder="Am I ready for a promotion? What should I learn next?" className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
-              <button onClick={handleAsk} disabled={mentorLoading || !mentorQ.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
-                {mentorLoading ? '...' : 'Ask'}
-              </button>
-            </div>
-            {mentorLoading && <div className="space-y-2">{[85, 70, 90, 60].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>}
-            {mentorA && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{mentorA}</p>}
-          </div>
-        )}
-      </div>
 
       {/* Resume Versions */}
       <Card title={`Resume Versions (${localResumes.length})`} action={

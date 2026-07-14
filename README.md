@@ -42,7 +42,7 @@ Simple task list. Fields: `text`, `done`, `priority` (high/medium/low), `area` (
 - **Stats row** (Pending / High Priority / Overdue / Completed) above the task list, and a **By Area** panel beside it on wide viewports (`lg:` breakpoint, task list `lg:col-span-3` / panel `lg:col-span-2`) — deterministic counts grouping pending tasks by their `area` field, no AI
 - **Recurring tasks**: completing a task with `recurrence` set auto-creates the next open instance with the same text/priority/area before marking the current one done
 - **Two-way sync with Coding and Trending Reading**: toggling a task also mirrors `done`/`completed_at` onto the linked row in `coding_daily_questions` and/or `trending_readings` (matched via `task_id`) — see §7 for the full sync mechanics
-- `ModuleRecommendations` ("AI Planner Advisor") widget at the top of the page
+- **Plan Coach** — `ModuleRecommendations` content registered as the page's AI advisor (see "AI advisor header architecture" under Architecture, below), opened from the header trigger rather than an inline widget
 - No focus/deep-work session tracking exists (added, then removed a few days later per user request — the table and UI are both gone)
 
 ## 3. Career (`/career`)
@@ -56,8 +56,8 @@ Five sub-areas sharing one page:
 - **Interview Q&A bank** — `question`, `answer`, `topic` (JS/TS/React/Angular/Node/Playwright/Testing/System Design/Behavioral/General), `difficulty`. Add / edit answer / delete.
 - **Coding + Learning streaks → Career**: `getCareerData()` pulls the current Coding practice streak (`computeCodingStats` from `daily-core.ts`) and the current Learning study streak (`getStudyStreak` from `learning/calculations.ts`) and (a) shows `🔥 {N}-day coding streak` / `📚 {N}-day study streak` badges on the profile card (each only shown when its streak is `> 0`), and (b) folds both into the AI Career Mentor's context string — Product Principle 4 ("modules should connect") implemented via the shared signals pattern in `src/lib/signals.ts`.
 - **AI features** (no generic `ModuleRecommendations` widget here — replaced by a dedicated mentor):
-  - `askCareerMentor(question, context)` — free-form Q&A fed the full profile + skills-by-category + pipeline snapshot + coding streak + study streak; answers under 250 words with direct verdicts on role-readiness/salary
-  - `generateInterviewQuestions(role, topic, difficulty)` — Claude generates 5 realistic Q&A pairs as JSON, used to bulk-seed the QA bank via an "AI Generate" modal
+  - **Career Mentor** — `askCareerMentor(question, context)` — free-form Q&A fed the full profile + skills-by-category + pipeline snapshot + coding streak + study streak; answers under 250 words with direct verdicts on role-readiness/salary; opened from the header trigger (see "AI advisor header architecture" under Architecture) with quick-prompt chips
+  - `generateInterviewQuestions(role, topic, difficulty)` — Claude generates 5 realistic Q&A pairs as JSON, used to bulk-seed the QA bank via an "AI Generate" modal on the Interview Q&A card (stays inline — a bulk action, not conversational, so it isn't part of the header advisor)
 
 ## 4. Finance (`/finance`)
 
@@ -74,7 +74,7 @@ The richest module — full personal finance tracking, scoped to the **current c
 - **EMI is not double-counted**: `loans.emi` is purely informational (shown only in the "Total Debt" card) and is never added on top of logged expenses — if EMI is paid, it's expected to already appear as a regular (typically "Bills") expense, and spend totals reflect only actual logged `expenses` rows.
 - **By Category drill-down**: each category row in the "By Category" breakdown is clickable — expanding it lists every individual expense logged in that category this month (date, description, amount, delete), not just the aggregate spent total.
 - **Rolling 3-month average expense** — computed on every load from the last 90 days of expenses, used as the "realistic monthly spend" baseline (as opposed to just this month's partial total).
-- **AI advisor** (`finance-advisor.ts`) — free-form Q&A fed the full financial snapshot: salary, EMIs (itemized per loan), 3-month avg spend, free cash/month (`salary − EMIs − avg spend`), portfolio with per-holding P&L, goals with target dates, and emergency-fund target in ₹. Answers under 200 words, numbers-driven.
+- **Money Advisor** (`finance-advisor.ts`) — free-form Q&A fed the full financial snapshot: salary, EMIs (itemized per loan), 3-month avg spend, free cash/month (`salary − EMIs − avg spend`), portfolio with per-holding P&L, goals with target dates, and emergency-fund target in ₹. Answers under 200 words, numbers-driven. Opened from the header trigger with quick-prompt chips (see "AI advisor header architecture" under Architecture).
 
 ## 5. Health (`/health`)
 
@@ -98,8 +98,8 @@ Daily metrics, a structured Daily Workout Planner, and overall-fitness coaching.
   - **Health Score (0–100)**: `nutrition×0.6 + activity×0.4` — nutrition blends calorie-accuracy and protein-hit-rate (0 if nothing logged); activity blends step-target-% with a workout-today bonus/floor; each sub-score carries a plain-English reason (e.g. "Protein is 24g below target"). No sleep component (removed).
 - **No charts** — the Weight Trend and Progress line charts (and `MetricChart.tsx`) were removed per direct request; only the current-day metric cards and 7-day averages remain.
 - **AI features**:
-  - `getHealthReport` — weekly trend report (weight change, calorie/protein/step averages) with a /10 score, what's working, what isn't, 3 recommendations — under 200 words
-  - `getDailyHealthPlan` — today's remaining calories/protein vs. target, BMI/deficit context, tied to the current Health Score — plain-text emoji checklist, under 150 words
+  - **Health Coach** (header advisor — see "AI advisor header architecture" under Architecture) — tabbed panel merging the generic recommendations widget with `getHealthReport`'s weekly trend report (weight change, calorie/protein/step averages, a /10 score, what's working, what isn't, 3 recommendations, under 200 words); each tab lazy-fetches independently on first view
+  - `getDailyHealthPlan` — today's remaining calories/protein vs. target, BMI/deficit context, tied to the current Health Score — plain-text emoji checklist, under 150 words; stays inline on the page as `TodaysPlanCard` (per-day, not part of the header advisor)
 
 ## 6. Learning (`/learning`)
 
@@ -108,8 +108,8 @@ Resource tracker: `title`, `type` (course/book/video/article/podcast), `url`, `c
 - Add / update status+progress+notes / delete
 - **Study logs** — `resource_id`, `duration_minutes`, `notes`, `date`; drives a study-streak counter and "minutes this week" stat
 - **Revision nudge ("what am I forgetting")** — deterministic, not AI: a `Needs Revision` card surfaces any `completed` resource with no study-log activity in the last 14 days, with a one-click "+ Log session" action. Same rule is exposed via the Telegram bot ("what needs revision").
-- **AI daily study plan** — given in-progress/not-started/completed counts and what's already been studied today, Claude proposes a "main focus" (60 min, references an actual resource by name), a "quick review" (15 min), and an optional stretch item — under 150 words
-- **AI resource quiz** — `generateResourceQuiz(title, category, type, notes)` generates 5 mixed conceptual/applied/comparison questions as JSON for self-testing, click-to-reveal in the UI
+- **Study Coach** (header advisor — see "AI advisor header architecture" under Architecture) — tabbed panel merging the generic recommendations widget with the AI daily study plan: given in-progress/not-started/completed counts and what's already been studied today, Claude proposes a "main focus" (60 min, references an actual resource by name), a "quick review" (15 min), and an optional stretch item — under 150 words; each tab lazy-fetches independently on first view
+- **AI resource quiz** — `generateResourceQuiz(title, category, type, notes)` generates 5 mixed conceptual/applied/comparison questions as JSON for self-testing, click-to-reveal in the UI; stays inline as a per-resource "Quiz me" button (tied to one resource row, not part of the header advisor)
 
 ## 7. Coding (`/coding`)
 
@@ -201,7 +201,7 @@ Every AI call in the app funnels through one function: `askAI(task, prompt, syst
 - **Budget enforcement** — `ai_usage_logs` logs every call (task, model, tokens, `estimated_cost_usd`, cache-hit flag). Before calling the model, the gateway sums today's and this month's spend; if either meets `AI_DAILY_BUDGET_USD` (default $3) or `AI_MONTHLY_BUDGET_USD` (default $50), it skips the API call and returns that task's configured fallback string instead — most tasks fall back to an empty string or `'[]'`/`'{"action":"help"}'` for silent degradation, while a few user-facing Q&A tasks (`doc_qa`, `career_mentor`, `finance_advisor`, `health_report`) return an explicit "I'm over my AI budget for today" message. No page or cron job can break from this.
 - **Rule-engine-first**: score math, sorting, chart data, the coding rotation, the trending-reading pick, the recurring-expense post, and the revision-nudge rule are all deterministic — never routed through `askAI`, per Product Principle 2.
 
-**AI feature files** (`src/features/ai/`), all going through the gateway: `career-mentor.ts`, `finance-advisor.ts`, `health-report.ts` (includes `askHealthCoach`, the Health bot's free-form Q&A), `coding-mentor.ts` (the Coding bot's free-form Q&A — recent streak/solved-questions/readings as context), `study-plan.ts`, `doc-qa.ts`, `weekly-digest.ts`, `recommendations.ts` (the generic "AI {Module} Advisor" widget — currently wired into Planner, Health, Learning, and Coding only; Career, Finance, and Documents each have a dedicated advisor instead so the generic widget was removed from those three).
+**AI feature files** (`src/features/ai/`), all going through the gateway: `career-mentor.ts`, `finance-advisor.ts`, `health-report.ts` (includes `askHealthCoach`, the Health bot's free-form Q&A), `coding-mentor.ts` (the Coding bot's free-form Q&A — recent streak/solved-questions/readings as context), `study-plan.ts`, `doc-qa.ts`, `weekly-digest.ts`, `recommendations.ts` (the generic recommendations widget behind Plan Coach, Code Mentor, and half of Health Coach/Study Coach — wired into Planner, Health, Learning, and Coding only; Career and Finance have a dedicated mentor/advisor instead, and Documents' Ask AI is per-document, so none of those three use the generic widget).
 
 ---
 
@@ -236,7 +236,9 @@ Every AI call in the app funnels through one function: `askAI(task, prompt, syst
 - `src/app/[route]/loading.tsx` — skeleton shown while the server fetches data
 - `src/app/[route]/error.tsx` — error boundary with a "Try again" reset button
 
-**Shared components** (`src/components/`): `Sidebar`, `BottomNav`, `Header`, `Card`, `UserInfo`, `Skeleton`.
+**Shared components** (`src/components/`): `Sidebar`, `BottomNav`, `Header`, `Card`, `UserInfo`, `Skeleton`, `AIAdvisorProvider`.
+
+**AI advisor header architecture** — every module's whole-page AI advisor (Plan Coach, Career Mentor, Money Advisor, Health Coach, Study Coach, Code Mentor) lives in the top nav bar, not inline in page content. `Header.tsx` is a separate component from each page's `*View.tsx` in the layout tree and can't read a page's local state directly, so `AIAdvisorProvider` (wrapping the whole app in root `layout.tsx`) provides a shared registration slot: each View calls `useAIAdvisor(label, icon, content)` once, which registers the trigger's label/icon and portals `content` (real JSX from that View's own render, with full access to its local state) directly into the panel body DOM node via `createPortal` — content never round-trips through Context state, so typing/interacting inside the panel only re-renders the View itself, not the Provider (an earlier version that lifted content into Context state caused an infinite re-render loop; portaling was the fix). `Header.tsx` reads the currently-registered trigger via `useAIAdvisorTrigger()` and renders nothing on routes with no registered advisor (Dashboard, Documents, Settings). Not every AI feature moved here — only whole-page advisors did; per-item contextual AI (Documents' "Ask AI"/"Summarise", Career's bulk "AI Generate" interview questions, Learning's per-resource "Quiz me") stays inline, tied to whichever item is selected.
 
 **Navigation structure** — desktop `Sidebar` groups modules by PRD-v2's "Growth Engine" pillars (Dashboard sits ungrouped above them): **Learn** → Learning; **Build** → Coding; **Perform** → Planner, Career; **Recover** → Health; then Finance and Documents ungrouped below (they don't map to a pillar), with Settings pinned in the footer. Mobile `BottomNav` uses a different, usage-frequency-based grouping instead (Home/Planner/Health/Finance in the primary row, everything else — including Career and Learning — behind a "More" sheet) rather than mirroring the pillar structure.
 

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, Trash2, Sparkles, ChevronDown, Settings2 } from 'lucide-react'
+import { useState, useEffect, useOptimistic, useTransition } from 'react'
+import { Plus, Trash2, Sparkles, Settings2 } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
+import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { upsertTodayMetric, logWorkout, deleteWorkout } from '../actions'
 import { getHealthReport } from '@/features/ai/health-report'
 import { computeHealthPlan } from '../calculations'
@@ -83,6 +84,40 @@ function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekA
   )
 }
 
+// Merges the generic recommendations widget + the weekly report into one
+// tabbed panel registered as the "Health Coach" advisor (see AIAdvisorProvider).
+function HealthCoachContent({ isOpen, context, metrics }: { isOpen: boolean; context: string; metrics: HealthMetric[] }) {
+  const [tab, setTab] = useState<'recommendations' | 'report'>('recommendations')
+  const [report, setReport] = useState<string | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && tab === 'report' && !report && !reportLoading) {
+      setReportLoading(true)
+      getHealthReport(metrics).then(setReport).finally(() => setReportLoading(false))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tab])
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-3 bg-surface-2 rounded-lg p-0.5">
+        <button onClick={() => setTab('recommendations')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${tab === 'recommendations' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Recommendations</button>
+        <button onClick={() => setTab('report')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${tab === 'report' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Weekly Report</button>
+      </div>
+      {tab === 'recommendations' ? (
+        <ModuleRecommendations moduleLabel="Health" context={context} isOpen={isOpen && tab === 'recommendations'} />
+      ) : reportLoading ? (
+        <div className="space-y-2">
+          {[90, 70, 80, 60, 85].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
+        </div>
+      ) : report ? (
+        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{report}</p>
+      ) : null}
+    </div>
+  )
+}
+
 interface Props {
   initialMetrics: HealthMetric[]
   initialProfile: HealthProfile | null
@@ -108,9 +143,6 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
   const [, startTransition] = useTransition()
   const [saving, setSaving] = useState<MetricField | null>(null)
   const [metrics, setMetrics] = useState<HealthMetric[]>(initialMetrics)
-  const [aiReport, setAiReport] = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [showAI, setShowAI] = useState(false)
   const [profile, setProfile] = useState<HealthProfile | null>(initialProfile)
   const [showProfileForm, setShowProfileForm] = useState(false)
 
@@ -133,19 +165,6 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
       return [{ id: `temp`, user_id: '', date: today, weight_kg: null, calories: null, protein_g: null, sleep_hours: null, steps: null, water_ml: null, recovery_score: null, notes: null, created_at: new Date().toISOString(), [field]: value }, ...prev]
     })
     upsertTodayMetric(field, value).finally(() => setSaving(null))
-  }
-
-  const handleAIReport = async () => {
-    if (aiLoading) return
-    if (showAI && aiReport) { setShowAI(false); return }
-    setShowAI(true)
-    setAiLoading(true)
-    try {
-      const report = await getHealthReport(metrics)
-      setAiReport(report)
-    } finally {
-      setAiLoading(false)
-    }
   }
 
   const handleLogWorkout = () => {
@@ -175,15 +194,19 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
     return null
   }
 
+  const healthContext = `Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${todayMetric?.steps ?? 'not logged'}. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Goal: get fit — gradual deficit toward a normal BMI.${dailyTargets ? ` Current BMI ${dailyTargets.bmi} (normal ≤24.9, ~${dailyTargets.normalBmiWeightKg}kg at his height), pace ~${dailyTargets.weeklyLossKg}kg/week.` : ''}`
+
+  const advisorOpen = useAIAdvisorOpen()
+  const advisorPortal = useAIAdvisor('Health Coach', Sparkles, (
+    <HealthCoachContent isOpen={advisorOpen} context={healthContext} metrics={metrics} />
+  ))
+
   return (
     <div className="space-y-4">
-      {/* AI Advisor + Today's Plan side by side — both collapsed by default, paired horizontally to halve the vertical footprint */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <ModuleRecommendations moduleLabel="Health" context={`Health Score: ${healthScore?.overall ?? 'not calculated (set up profile)'}/100. Today: weight=${todayMetric?.weight_kg ?? 'not logged'}kg, calories=${todayMetric?.calories ?? 'not logged'}, protein=${todayMetric?.protein_g ?? 'not logged'}g, steps=${todayMetric?.steps ?? 'not logged'}. Workouts today: ${workouts.length ? workouts.map(w => w.type).join(', ') : 'none'}. Goal: get fit — gradual deficit toward a normal BMI.${dailyTargets ? ` Current BMI ${dailyTargets.bmi} (normal ≤24.9, ~${dailyTargets.normalBmiWeightKg}kg at his height), pace ~${dailyTargets.weeklyLossKg}kg/week.` : ''}`} />
-        {profile && dailyTargets && healthScore && (
-          <TodaysPlanCard profile={profile} plan={dailyTargets} todayMetric={todayMetric} score={healthScore} today={today} />
-        )}
-      </div>
+      {advisorPortal}
+      {profile && dailyTargets && healthScore && (
+        <TodaysPlanCard profile={profile} plan={dailyTargets} todayMetric={todayMetric} score={healthScore} today={today} />
+      )}
 
       <DailyWorkoutCard initialWorkout={initialDailyWorkout} stats={workoutStats} />
 
@@ -298,33 +321,6 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           </ul>
         )}
       </Card>
-
-      {/* AI Health Coach */}
-      <div className="border border-surface-3 rounded-xl overflow-hidden">
-        <button onClick={handleAIReport} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <span className="text-sm font-medium text-slate-300">AI Weekly Health Report</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {aiLoading && <span className="text-xs text-slate-500">Analysing...</span>}
-            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showAI ? 'rotate-180' : ''}`} />
-          </div>
-        </button>
-        {showAI && (
-          <div className="px-4 py-4 bg-surface-1 border-t border-surface-3">
-            {aiLoading ? (
-              <div className="space-y-2">
-                {[90, 70, 80, 60, 85].map((w, i) => (
-                  <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />
-                ))}
-              </div>
-            ) : aiReport ? (
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{aiReport}</p>
-            ) : null}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
