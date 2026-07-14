@@ -5,6 +5,13 @@ import { getResourcesNeedingRevision } from '@/features/learning/calculations'
 import { getTodayAssignmentRows } from '@/features/coding/daily-core'
 import { getActiveWorkout } from '@/features/health/workout-core'
 import type { Resource, StudyLog } from '@/features/learning/types'
+import { rankSignals, type Signal } from '@/lib/signals'
+import { checkOverdueTasks, checkHighPriorityPending } from '@/features/planner/signals'
+import { checkInterviewStage } from '@/features/career/signals'
+import { checkBudget } from '@/features/finance/signals'
+import { checkQuestionPending } from '@/features/coding/signals'
+import { checkWorkoutPending, checkNoMetricsToday } from '@/features/health/signals'
+import { checkRevisionNeeded } from '@/features/learning/signals'
 
 export interface TopAction {
   emoji: string
@@ -26,65 +33,24 @@ interface TopActionInput {
 
 // Deterministic ranking — no AI call. Per Product Principles (CLAUDE.md):
 // "reduce decisions, don't just surface data" — surface the 3 highest-impact
-// actions instead of a wall of stat cards.
+// actions instead of a wall of stat cards. Each candidate comes from its own
+// module's signals.ts (see src/lib/signals.ts) rather than being hand-rolled
+// here, so new modules can plug into Today's Focus without touching this file.
 function computeTopActions(input: TopActionInput): TopAction[] {
   const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, workoutPending } = input
-  const candidates: (TopAction & { score: number })[] = []
 
-  const overdue = pendingTasks.filter(t => t.due_date && t.due_date < today)
-  if (overdue.length > 0) {
-    candidates.push({
-      score: 100, emoji: '🔴', href: '/planner',
-      text: `${overdue.length} task${overdue.length > 1 ? 's' : ''} overdue — clear ${overdue.length > 1 ? 'these' : 'this'} first`,
-    })
-  }
+  const signals = [
+    checkOverdueTasks(pendingTasks, today),
+    checkInterviewStage(applications),
+    checkBudget(monthSpend, monthBudget),
+    checkHighPriorityPending(pendingTasks, today),
+    checkQuestionPending(codingQuestionPending),
+    checkWorkoutPending(workoutPending),
+    checkNoMetricsToday(todayMetric),
+    checkRevisionNeeded(resourcesNeedingRevision),
+  ].filter((s): s is Signal => s !== null)
 
-  const interviewApps = applications.filter(a => a.status === 'interview')
-  if (interviewApps.length > 0) {
-    candidates.push({
-      score: 90, emoji: '🎯', href: '/career',
-      text: `${interviewApps.length} application${interviewApps.length > 1 ? 's' : ''} at interview stage — prep now`,
-    })
-  }
-
-  if (monthBudget > 0) {
-    const ratio = monthSpend / monthBudget
-    if (ratio >= 1) {
-      candidates.push({ score: 80, emoji: '💸', href: '/finance', text: `Over budget this month by ₹${Math.round(monthSpend - monthBudget).toLocaleString('en-IN')}` })
-    } else if (ratio >= 0.9) {
-      candidates.push({ score: 55, emoji: '💸', href: '/finance', text: `${Math.round(ratio * 100)}% of monthly budget used` })
-    }
-  }
-
-  const highPriorityPending = pendingTasks.filter(t => t.priority === 'high' && !(t.due_date && t.due_date < today))
-  if (highPriorityPending.length > 0) {
-    candidates.push({
-      score: 70, emoji: '⚡', href: '/planner',
-      text: `${highPriorityPending.length} high-priority task${highPriorityPending.length > 1 ? 's' : ''} pending`,
-    })
-  }
-
-  if (codingQuestionPending) {
-    candidates.push({ score: 65, emoji: '💻', href: '/coding', text: 'Today\'s coding question is still open' })
-  }
-
-  if (workoutPending) {
-    candidates.push({ score: 60, emoji: '🏋️', href: '/health', text: 'Today\'s workout is still open' })
-  }
-
-  const metricsLoggedToday = !!todayMetric && ['weight_kg', 'calories', 'steps'].some(k => todayMetric[k] != null)
-  if (!metricsLoggedToday) {
-    candidates.push({ score: 50, emoji: '📊', href: '/health', text: 'No health metrics logged today' })
-  }
-
-  if (resourcesNeedingRevision > 0) {
-    candidates.push({
-      score: 45, emoji: '📚', href: '/learning',
-      text: `${resourcesNeedingRevision} resource${resourcesNeedingRevision > 1 ? 's' : ''} completed but not revised in 14+ days`,
-    })
-  }
-
-  return candidates.sort((a, b) => b.score - a.score).slice(0, 3).map(c => ({ emoji: c.emoji, text: c.text, href: c.href }))
+  return rankSignals(signals, 3).map(s => ({ emoji: s.emoji, text: s.message, href: s.href }))
 }
 
 export async function getDashboardData() {

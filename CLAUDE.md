@@ -8,6 +8,10 @@ Personal OS is a single-user AI Operating System — a Next.js 15 web app backed
 
 **For the full, current, module-by-module spec (exact fields, formulas, AI features, Telegram capabilities, cron jobs, complete DB schema) — read `README.md`, not this section.** This file covers workflow/conventions only; README.md is the single source of truth for what the app does, and per the checklist below it's kept current with every functional change.
 
+## Workflow
+
+Before touching code for any non-trivial feature or fix, give a spec first: what's changing, why, the approach, and any tradeoffs — then wait for explicit go-ahead before writing code. Small, obvious one-line fixes (typos, single-value tweaks) don't need this.
+
 ## Stack
 
 - **Framework**: Next.js 15 App Router (TypeScript)

@@ -165,7 +165,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
     if (!mentorQ.trim() || mentorLoading) return
     setMentorLoading(true); setMentorA(null)
     try {
-      const answer = await askCareerMentor(mentorQ, { profile: localProfile, skills: localSkills, applications: localApps })
+      const answer = await askCareerMentor(mentorQ, { profile: localProfile, skills: localSkills, applications: localApps, codingStreak })
       setMentorA(answer)
     } finally { setMentorLoading(false) }
   }

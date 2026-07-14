@@ -7,6 +7,7 @@ interface CareerContext {
   profile: CareerProfile | null
   skills: Skill[]
   applications: Application[]
+  codingStreak?: number
 }
 
 export async function askCareerMentor(question: string, ctx: CareerContext): Promise<string> {
@@ -29,6 +30,7 @@ ${Object.entries(skillsByCategory).map(([cat, skills]) => `  ${cat}: ${skills.jo
 
 Job search: ${activeApps.length} active applications${offers.length ? `, ${offers.length} offer(s)` : ''}
 Recent applications: ${ctx.applications.slice(0, 5).map(a => `${a.company} (${a.role}, ${a.status})`).join(', ') || 'none'}
+${ctx.codingStreak ? `Coding practice: ${ctx.codingStreak}-day streak — factor consistency into interview readiness` : ''}
 
 Question: ${question}`
 
