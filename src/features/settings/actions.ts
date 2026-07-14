@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getAiBudgetLimits } from '@/lib/ai-gateway'
+import { getCronJobHealth, type CronJobHealth } from '@/lib/cron-log'
 import type { ReminderSlot } from './types'
 
 export async function getReminders() {
@@ -42,7 +43,7 @@ export async function getAiBudgetStatus() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { dailyBudget, monthlyBudget } = await getAiBudgetLimits()
-  if (!user) return { dailyBudget, monthlyBudget, spentToday: 0, spentThisMonth: 0 }
+  if (!user) return { dailyBudget, monthlyBudget, spentToday: 0, spentThisMonth: 0, spendByTask: [] as { task: string; cost: number }[] }
 
   const now = new Date()
   const todayStart = new Date(now).toISOString().split('T')[0] + 'T00:00:00.000Z'
@@ -50,7 +51,7 @@ export async function getAiBudgetStatus() {
 
   const { data } = await supabase
     .from('ai_usage_logs')
-    .select('estimated_cost_usd, created_at')
+    .select('task, estimated_cost_usd, created_at')
     .eq('user_id', user.id)
     .gte('created_at', monthStart)
 
@@ -58,7 +59,24 @@ export async function getAiBudgetStatus() {
   const spentThisMonth = rows.reduce((s, r) => s + Number(r.estimated_cost_usd), 0)
   const spentToday = rows.filter(r => (r.created_at as string) >= todayStart).reduce((s, r) => s + Number(r.estimated_cost_usd), 0)
 
-  return { dailyBudget, monthlyBudget, spentToday, spentThisMonth }
+  // This month's spend grouped by task — turns "you spent $1.86" into "you
+  // spent $1.86, mostly on X" (deterministic aggregation, no AI).
+  const byTask = new Map<string, number>()
+  for (const r of rows) {
+    byTask.set(r.task, (byTask.get(r.task) ?? 0) + Number(r.estimated_cost_usd))
+  }
+  const spendByTask = [...byTask.entries()]
+    .map(([task, cost]) => ({ task, cost }))
+    .sort((a, b) => b.cost - a.cost)
+
+  return { dailyBudget, monthlyBudget, spentToday, spentThisMonth, spendByTask }
+}
+
+export async function getSystemHealth(): Promise<CronJobHealth[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  return getCronJobHealth(supabase)
 }
 
 // Deterministic — a full backup of everything you've entered, grouped by

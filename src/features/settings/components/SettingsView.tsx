@@ -1,16 +1,32 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, Trash2, Bell, LogOut, Sparkles, Download } from 'lucide-react'
+import { Plus, Trash2, Bell, LogOut, Sparkles, Download, Activity } from 'lucide-react'
 import Card from '@/components/Card'
 import { signout } from '@/app/login/actions'
 import { addReminder, deleteReminder, exportAllData } from '../actions'
 import { REMINDER_MODULES } from '../types'
 import type { Reminder, ReminderSlot } from '../types'
+import type { CronJobHealth } from '@/lib/cron-log'
 
 const MODULE_LABEL: Record<string, string> = {
   planner: 'Planner', career: 'Career', finance: 'Finance', health: 'Health',
   learning: 'Learning', coding: 'Coding', documents: 'Documents',
+}
+
+const TASK_LABEL: Record<string, string> = {
+  telegram_intent: 'Telegram intent parsing', doc_summary: 'Document summaries', doc_qa: 'Document Q&A',
+  career_mentor: 'Career Mentor', interview_questions: 'Interview question generation', finance_advisor: 'Money Advisor',
+  health_report: 'Health report', health_daily_plan: 'Daily health plan', health_advisor: 'Health Coach',
+  study_plan: 'Study plan', resource_quiz: 'Resource quiz', coding_mentor: 'Code Mentor',
+  module_recommendations: 'Module recommendations', daily_briefing: 'Daily briefing',
+  weekly_digest: 'Weekly digest', monthly_digest: 'Monthly digest', telegram_vision: 'Photo recognition',
+}
+
+const JOB_LABEL: Record<string, string> = {
+  'daily-briefing': 'Daily Briefing', 'daily-coding': 'Daily Coding', 'recurring-expenses': 'Recurring Expenses',
+  'sip-contribution': 'SIP Contribution', 'trending-reading': 'Trending Reading', 'evening-checkin': 'Evening Check-in',
+  'monthly-digest': 'Monthly Digest', 'weekly-digest': 'Weekly Digest',
 }
 
 function fmtUsd(n: number): string {
@@ -19,13 +35,23 @@ function fmtUsd(n: number): string {
   return n.toFixed(2)
 }
 
+function fmtRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const hours = Math.floor(diffMs / (60 * 60 * 1000))
+  if (hours < 1) return 'just now'
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 interface Props {
   email: string | null
   initialReminders: Reminder[]
-  aiBudget: { dailyBudget: number; monthlyBudget: number; spentToday: number; spentThisMonth: number }
+  aiBudget: { dailyBudget: number; monthlyBudget: number; spentToday: number; spentThisMonth: number; spendByTask: { task: string; cost: number }[] }
+  systemHealth: CronJobHealth[]
 }
 
-export default function SettingsView({ email, initialReminders, aiBudget }: Props) {
+export default function SettingsView({ email, initialReminders, aiBudget, systemHealth }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [label, setLabel] = useState('')
   const [slot, setSlot] = useState<ReminderSlot>('morning')
@@ -135,7 +161,35 @@ export default function SettingsView({ email, initialReminders, aiBudget }: Prop
             </div>
           </div>
           <p className="text-xs text-slate-700">Ceilings are set via environment variables (AI_DAILY_BUDGET_USD / AI_MONTHLY_BUDGET_USD) — once hit, AI features fall back to a friendly message instead of erroring.</p>
+          {aiBudget.spendByTask.length > 0 && (
+            <div className="pt-1 border-t border-surface-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 mt-3">This month, by feature</p>
+              <ul className="space-y-1.5">
+                {aiBudget.spendByTask.slice(0, 5).map(({ task, cost }) => (
+                  <li key={task} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">{TASK_LABEL[task] ?? task}</span>
+                    <span className="text-slate-500 tabular-nums">${fmtUsd(cost)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
+      </Card>
+
+      <Card title="System Health" action={<Activity size={13} className="text-accent" />}>
+        <p className="text-xs text-slate-600 mb-3">Scheduled jobs (Vercel Cron) — last confirmed run, and whether it&apos;s within its expected cadence.</p>
+        <ul className="space-y-1.5">
+          {systemHealth.map(h => (
+            <li key={h.job} className="flex items-center gap-3 py-1">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${h.status === 'healthy' ? 'bg-green-400' : h.status === 'stale' ? 'bg-red-400' : 'bg-slate-600'}`} />
+              <span className="flex-1 text-sm text-slate-300">{JOB_LABEL[h.job] ?? h.job}</span>
+              <span className={`text-xs shrink-0 ${h.status === 'stale' ? 'text-red-400' : 'text-slate-600'}`}>
+                {h.lastRun ? fmtRelativeTime(h.lastRun) : 'never run yet'}
+              </span>
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <Card title="Reminders" action={
