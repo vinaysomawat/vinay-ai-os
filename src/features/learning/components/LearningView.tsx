@@ -98,6 +98,12 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const counts = STATUSES.reduce((acc, s) => ({ ...acc, [s]: resources.filter(r => r.status === s).length }), {} as Record<ResourceStatus, number>)
   const needsRevision = getResourcesNeedingRevision(resources, studyLogs)
 
+  const byCategory = resources.reduce<Record<string, number>>((acc, r) => {
+    acc[r.category] = (acc[r.category] ?? 0) + 1
+    return acc
+  }, {})
+  const categoryEntries = Object.entries(byCategory).sort((a, b) => b[1] - a[1])
+
   const existingUrls = new Set(resources.map(r => r.url).filter(Boolean))
   const suggestions = SUGGESTED_RESOURCES.filter(s => !existingUrls.has(s.url) && !addedSuggestionUrls.has(s.url))
 
@@ -244,7 +250,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
         </div>
       )}
 
-      {/* Status filter + Resource list */}
+      {/* Status filter */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === 'all' ? 'bg-accent text-white' : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
           All ({resources.length})
@@ -260,7 +266,8 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
         })}
       </div>
 
-      <Card title="Resources" action={
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+      <Card title="Resources" className="lg:col-span-3" action={
         <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
           <Plus size={12} /> Add
         </button>
@@ -314,6 +321,27 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
           })}
         </ul>
       </Card>
+
+      <Card title="By Category" padding="p-3" className="lg:col-span-2">
+        {categoryEntries.length === 0 ? (
+          <p className="text-sm text-slate-600 text-center py-6">No resources yet</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {categoryEntries.map(([category, count]) => (
+              <li key={category} className="py-0.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="flex-1 text-sm text-slate-300 truncate">{category}</p>
+                  <span className="text-xs text-slate-500 bg-surface-2 rounded-full px-2 py-0.5 shrink-0">{count}</span>
+                </div>
+                <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
+                  <div className="h-full bg-accent/60 rounded-full" style={{ width: `${(count / resources.length) * 100}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      </div>
 
       {/* Add resource modal */}
       {showForm && (

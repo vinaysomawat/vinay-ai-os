@@ -114,6 +114,7 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
 
   return (
     <div className="space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       <Card title="Account">
         <div className="flex items-center justify-between">
           <div>
@@ -139,7 +140,9 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
           </button>
         </div>
       </Card>
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       <Card title="AI Budget" action={<Sparkles size={13} className="text-accent" />}>
         <div className="space-y-4">
           <div>
@@ -191,6 +194,7 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
           ))}
         </ul>
       </Card>
+      </div>
 
       <Card title="Reminders" action={
         <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">

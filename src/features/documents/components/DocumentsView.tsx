@@ -120,12 +120,16 @@ export default function DocumentsView({ initialDocuments }: Props) {
         <div className="flex-1 overflow-y-auto space-y-1">
           {filtered.length === 0 && <p className="text-xs text-slate-600 text-center py-6">No documents</p>}
           {filtered.map(doc => (
-            <button key={doc.id} onClick={() => openDoc(doc)}
-              className={`w-full text-left p-3 rounded-lg border transition-colors group ${selected?.id === doc.id ? 'bg-accent/10 border-accent/30' : 'bg-surface-1 border-surface-3 hover:bg-surface-2'}`}>
+            <div key={doc.id} role="button" tabIndex={0} onClick={() => openDoc(doc)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDoc(doc) } }}
+              className={`w-full text-left p-3 rounded-lg border transition-colors group cursor-pointer ${selected?.id === doc.id ? 'bg-accent/10 border-accent/30' : 'bg-surface-1 border-surface-3 hover:bg-surface-2'}`}>
               <div className="flex items-start gap-2">
                 <FileText size={13} className="shrink-0 mt-0.5 text-slate-500" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-300 truncate font-medium">{doc.title}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-slate-300 truncate font-medium">{doc.title}</p>
+                    <span className="text-xs text-slate-700 shrink-0">{doc.updated_at.slice(0, 10)}</span>
+                  </div>
                   <p className="text-xs text-slate-600 mt-0.5 truncate">{doc.content.slice(0, 50) || 'Empty'}</p>
                   {doc.tags.length > 0 && (
                     <div className="flex gap-1 mt-1 flex-wrap">
@@ -138,7 +142,7 @@ export default function DocumentsView({ initialDocuments }: Props) {
                   <Trash2 size={12} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>

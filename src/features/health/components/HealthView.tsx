@@ -258,13 +258,14 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
         <p className="text-xs text-slate-600 -mt-2">Log today&apos;s weight below to unlock your calorie targets and Health Score.</p>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* Today's metrics */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-slate-300">Today&apos;s Metrics</h3>
           <span className="text-xs text-slate-600">Press Enter to save</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2">
           {METRICS.map(m => (
             <MetricCard
               key={m.field}
@@ -321,6 +322,7 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           </ul>
         )}
       </Card>
+      </div>
     </div>
   )
 }

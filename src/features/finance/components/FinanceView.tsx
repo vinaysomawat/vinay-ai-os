@@ -110,7 +110,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
     const spent = localExpenses.filter(e => e.category === cat).reduce((s, e) => s + Number(e.amount), 0)
     const budget = localBudgets.find(b => b.category === cat)?.amount ?? 0
     return { cat, spent, budget }
-  }).filter(c => c.spent > 0 || c.budget > 0)
+  }).filter(c => c.spent > 0 || c.budget > 0).sort((a, b) => b.spent - a.spent)
 
   const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
@@ -358,7 +358,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       </div>
 
       {/* Loans + Investments */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card title="Loans & EMIs" action={
           <button onClick={() => setModal('loan')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
             <Plus size={12} /> Add loan
@@ -585,9 +585,14 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       </div>
 
       <Card title="Recurring Expenses" action={
-        <button onClick={() => setModal('recurring')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
-          <Plus size={12} /> Add
-        </button>
+        <div className="flex items-center gap-3">
+          {localRecurring.some(r => r.active) && (
+            <span className="text-xs text-slate-500">{fmt(localRecurring.filter(r => r.active).reduce((s, r) => s + Number(r.amount), 0))}/mo total</span>
+          )}
+          <button onClick={() => setModal('recurring')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
+            <Plus size={12} /> Add
+          </button>
+        </div>
       }>
         <p className="text-xs text-slate-600 mb-3">Auto-logged into Expenses each month on its scheduled day — rent, subscriptions, and other fixed monthly costs you&apos;d otherwise have to re-enter by hand.</p>
         {localRecurring.length === 0 ? (

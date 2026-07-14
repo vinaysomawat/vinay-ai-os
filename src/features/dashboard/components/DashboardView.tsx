@@ -209,7 +209,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* Live data panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card title="Pending Tasks" action={
           <Link href="/planner" className="text-xs text-accent hover:underline">View all</Link>
         }>

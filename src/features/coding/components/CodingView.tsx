@@ -32,9 +32,14 @@ export default function CodingView({ dailyAssignment, codingStats, calendar, cod
   return (
     <div className="space-y-5">
       {advisorPortal}
-      <DailyCodingCard initialAssignment={dailyAssignment} stats={codingStats} />
-
-      <TrendingReadingCard initialReading={trendingReading} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+        <div className="lg:col-span-3">
+          <DailyCodingCard initialAssignment={dailyAssignment} stats={codingStats} />
+        </div>
+        <div className="lg:col-span-2">
+          <TrendingReadingCard initialReading={trendingReading} />
+        </div>
+      </div>
 
       <Card title="Contribution Calendar" action={<CodingSettingsPopover initialSettings={codingSettings} />}>
         <CodingCalendar days={calendar} />

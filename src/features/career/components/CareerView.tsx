@@ -96,6 +96,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   const [localProfile, setLocalProfile] = useState(profile)
   const [localResumes, setLocalResumes] = useState(resumeVersions)
 
+  const [activeTab, setActiveTab] = useState<'applications' | 'interview' | 'profile'>('applications')
   const [filterStatus, setFilterStatus] = useState<AppStatus | 'all'>('all')
   const [filterTopic, setFilterTopic] = useState<string>('all')
   const [modal, setModal] = useState<'app' | 'skill' | 'qa' | 'generate' | 'resume' | null>(null)
@@ -239,6 +240,22 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   return (
     <div className="space-y-5">
       {advisorPortal}
+
+      {/* Tabs — Career combines 5 sub-areas; tabbing keeps each view short instead of one long scroll */}
+      <div className="flex gap-1.5">
+        {([
+          { key: 'applications', label: 'Applications', count: localApps.length },
+          { key: 'interview', label: 'Interview Prep', count: localQA.length },
+          { key: 'profile', label: 'Profile & Skills', count: null },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === t.key ? 'bg-accent text-white' : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
+            {t.label}{t.count !== null && <span className="ml-1.5 opacity-70">{t.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'profile' && <>
       {/* Career Profile */}
       <Card title="Career Profile" action={
         (codingStreak > 0 || studyStreak > 0)
@@ -266,7 +283,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
         </button>
       }>
         {localResumes.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No resume versions yet — add one to start tracking what you send where</p>
+          <p className="text-sm text-slate-600 py-1.5 flex items-center gap-2"><FileText size={14} className="text-slate-700 shrink-0" /> No resume versions yet — add one to start tracking what you send where</p>
         ) : (
           <ul className="space-y-1.5">
             {localResumes.map(r => (
@@ -328,7 +345,9 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           </div>
         )}
       </Card>
+      </>}
 
+      {activeTab === 'interview' && <>
       {/* Revision nudge — rule-based, not AI: Q&A not reviewed (or added) in 14+ days */}
       {needsRevisionQA.length > 0 && (
         <Card title="Needs Revision" action={<RotateCcw size={13} className="text-amber-400" />}>
@@ -471,7 +490,9 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           </ul>
         )}
       </Card>
+      </>}
 
+      {activeTab === 'applications' && <>
       {/* Applications Pipeline */}
       <div>
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
@@ -528,6 +549,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           </ul>
         </Card>
       </div>
+      </>}
 
       {/* Modals */}
       {modal && (

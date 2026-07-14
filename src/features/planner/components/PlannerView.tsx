@@ -186,6 +186,11 @@ export default function PlannerView({ initialTasks }: Props) {
                       <RefreshCw size={9} />{task.recurrence}
                     </span>
                   )}
+                  {task.due_date && (
+                    <span className={`text-xs ${task.due_date < new Date().toISOString().split('T')[0] ? 'text-red-400' : 'text-slate-600'}`}>
+                      due {task.due_date}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority]}`} />
@@ -228,11 +233,16 @@ export default function PlannerView({ initialTasks }: Props) {
         {areaEntries.length === 0 ? (
           <p className="text-sm text-slate-600 text-center py-6">No pending tasks</p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="space-y-1.5">
             {areaEntries.map(([area, count]) => (
-              <li key={area} className="flex items-center gap-2 py-1">
-                <p className="flex-1 text-sm text-slate-300 truncate">{area}</p>
-                <span className="text-xs text-slate-500 bg-surface-2 rounded-full px-2 py-0.5 shrink-0">{count}</span>
+              <li key={area} className="py-0.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="flex-1 text-sm text-slate-300 truncate">{area}</p>
+                  <span className="text-xs text-slate-500 bg-surface-2 rounded-full px-2 py-0.5 shrink-0">{count}</span>
+                </div>
+                <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
+                  <div className="h-full bg-accent/60 rounded-full" style={{ width: `${(count / pending.length) * 100}%` }} />
+                </div>
               </li>
             ))}
           </ul>

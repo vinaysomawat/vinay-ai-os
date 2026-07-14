@@ -61,14 +61,14 @@ export default function HealthScoreHero({ score, onEditProfile }: { score: Healt
 
         <div className="flex-1 w-full">
           <p className={`text-sm font-bold mb-3 ${levelColor}`}>{level}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-wrap gap-6">
             {SUB_SCORES.map(({ key, label, color }) => {
               const s = score[key]
               return (
-                <div key={key} className="flex items-center gap-2">
+                <div key={key} className="flex items-center gap-2 min-w-0">
                   <MiniRing score={s.score} color={color} />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-300">{label}</p>
+                    <p className="text-xs font-medium text-slate-300">{label} <span className="text-slate-600 font-normal">{s.score}/100</span></p>
                     <p className="text-[11px] text-slate-600 truncate" title={s.reason}>{s.reason}</p>
                   </div>
                 </div>
