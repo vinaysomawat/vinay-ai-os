@@ -26,10 +26,10 @@ export async function GET(req: Request) {
 
   const reading = await generateTrendingReadingForUser(supabase, user.id)
   if (!reading) {
-    return NextResponse.json({ ok: true, notified: false, message: 'No matching front-page story today' })
+    return NextResponse.json({ ok: true, notified: false, message: 'No system design article available today' })
   }
 
-  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `📰 *Today's Trending Read*\n\n${reading.title}${reading.points ? ` _(${reading.points} pts on HN)_` : ''}\n${reading.url}\n\n_Mark it done in AI OS or Telegram once read._`)
+  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `📰 *Today's System Design Read*\n\n${reading.title}\n${reading.source}\n${reading.url}\n\n_Mark it done in AI OS or Telegram once read._`)
 
   return NextResponse.json({ ok: true, notified: true })
 }

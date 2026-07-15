@@ -1,55 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TrendingReading } from './types'
-
-const KEYWORDS = [
-  'react', 'next.js', 'nextjs', 'vue', 'svelte', 'angular', 'javascript', 'typescript',
-  'css', 'html', 'frontend', 'front-end', 'front end', 'web dev', 'webdev', 'browser',
-  'ui', 'ux', 'design system', 'tailwind', 'vite', 'webassembly', 'node.js', 'nodejs',
-  'ai', 'llm', 'claude', 'anthropic', 'gpt', 'openai', 'chatgpt', 'copilot', 'cursor',
-  'agent', 'agentic', 'machine learning', 'ml model', 'neural',
-  // Frontend system design — Staff-level interview prep territory (matches
-  // career/suggested-questions.ts's System Design topic), kept specific
-  // rather than bare "architecture"/"scale" to avoid pulling in unrelated
-  // hardware/backend-only HN stories.
-  'system design', 'frontend architecture', 'software architecture', 'web architecture',
-  'micro-frontend', 'microfrontend', 'micro frontend', 'monorepo', 'distributed systems',
-  'scalability', 'api design', 'state management', 'caching strategy', 'cdn',
-]
-
-interface HNHit {
-  title: string | null
-  url: string | null
-  points: number | null
-  objectID: string
-}
+import { SYSTEM_DESIGN_ARTICLES } from './system-design-articles'
 
 function todayStr() {
   return new Date().toISOString().split('T')[0]
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-// Word-boundary match — plain substring matching lets short keywords like
-// "ai" or "ui" false-positive inside unrelated words ("maintain", "domain").
-const KEYWORD_PATTERN = new RegExp(`\\b(${KEYWORDS.map(escapeRegex).join('|')})\\b`, 'i')
-
-function matchesKeyword(title: string): boolean {
-  return KEYWORD_PATTERN.test(title)
-}
-
-// Hacker News's Algolia-backed API — public, no auth, one request for the
-// whole front page instead of N+1 item lookups.
-async function fetchHNFrontPage(): Promise<HNHit[]> {
-  try {
-    const res = await fetch('https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=100', { next: { revalidate: 3600 } })
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data.hits ?? []) as HNHit[]
-  } catch {
-    return []
-  }
 }
 
 export async function getTodayTrendingReading(supabase: SupabaseClient, userId: string): Promise<TrendingReading | null> {
@@ -62,25 +16,23 @@ export async function getTodayTrendingReading(supabase: SupabaseClient, userId: 
   return (data as TrendingReading | null) ?? null
 }
 
-// Deterministic selection over real fetched data — no AI involved. Picks the
-// highest-points frontend/AI story not already assigned before.
+// Deterministic rotation over the curated pool (system-design-articles.ts) —
+// no AI, no live fetch. Excludes articles already assigned before, restarting
+// the cycle once the whole pool is exhausted — same "no-repeat-until-
+// exhausted" shape as the Workout Planner's rotation and getDailyTip().
+// Previously fetched Hacker News's front page and keyword-matched titles,
+// but system design is niche enough that HN's front page often had nothing
+// relevant on a given day.
 export async function generateTrendingReadingForUser(supabase: SupabaseClient, userId: string): Promise<TrendingReading | null> {
   const existing = await getTodayTrendingReading(supabase, userId)
   if (existing) return existing
 
-  const [{ data: seenRows }, hits] = await Promise.all([
-    supabase.from('trending_readings').select('url').eq('user_id', userId),
-    fetchHNFrontPage(),
-  ])
+  const { data: seenRows } = await supabase.from('trending_readings').select('url').eq('user_id', userId)
   const seenUrls = new Set((seenRows ?? []).map((r: { url: string }) => r.url))
 
-  const candidates = hits
-    .filter((h): h is HNHit & { title: string; url: string } => !!h.title && !!h.url)
-    .filter(h => matchesKeyword(h.title))
-    .filter(h => !seenUrls.has(h.url))
-    .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
-
-  const pick = candidates[0]
+  const unseen = SYSTEM_DESIGN_ARTICLES.filter(a => !seenUrls.has(a.url))
+  const pool = unseen.length > 0 ? unseen : SYSTEM_DESIGN_ARTICLES
+  const pick = pool[Math.floor(Math.random() * pool.length)]
   if (!pick) return null
 
   const { data: task } = await supabase
@@ -93,7 +45,7 @@ export async function generateTrendingReadingForUser(supabase: SupabaseClient, u
     .from('trending_readings')
     .insert({
       user_id: userId, assigned_date: todayStr(), title: pick.title, url: pick.url,
-      source: 'hackernews', points: pick.points ?? null, task_id: task?.id ?? null,
+      source: pick.source, points: null, task_id: task?.id ?? null,
     })
     .select('*')
     .single()

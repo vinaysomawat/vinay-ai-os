@@ -44,8 +44,8 @@ export async function execute(action: Record<string, unknown>, db: SupabaseClien
     }
     case 'today_reading': {
       const reading = await generateTrendingReadingForUser(db, userId)
-      if (!reading) return `📰 No matching frontend/AI story on Hacker News' front page today.`
-      return `📰 *Today's Trending Read:*${reading.completed ? ' (done)' : ''}\n\n${reading.title}${reading.points ? ` _(${reading.points} pts)_` : ''}\n${reading.url}`
+      if (!reading) return `📰 No system design article available today.`
+      return `📰 *Today's System Design Read:*${reading.completed ? ' (done)' : ''}\n\n${reading.title}${reading.points ? ` _(${reading.points} pts)_` : ''}\n${reading.url}`
     }
     case 'complete_reading': {
       const { getTodayTrendingReading } = await import('@/features/trending/core')

@@ -47,7 +47,7 @@ export function computeTodayProgress(input: TodayProgressInput): TodayProgress {
   }
 
   if (input.trendingReading) {
-    items.push({ key: 'trending', label: "Read today's trending article", done: input.trendingReading.completed, href: '/coding' })
+    items.push({ key: 'trending', label: "Read today's system design article", done: input.trendingReading.completed, href: '/coding' })
   }
 
   if (input.hasLearningResources) {
