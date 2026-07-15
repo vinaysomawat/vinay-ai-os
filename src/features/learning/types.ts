@@ -12,6 +12,9 @@ export interface Resource {
   progress: number
   notes: string | null
   created_at: string
+  // Linked Planner task ("Read: {title}") — null for resources added before
+  // this sync existed; not backfilled.
+  task_id: string | null
 }
 
 export interface StudyLog {

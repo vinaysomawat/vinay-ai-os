@@ -128,7 +128,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
     setAddedSuggestionUrls(prev => new Set(prev).add(s.url))
     const optimistic: Resource = {
       id: `temp-${Date.now()}`, user_id: '', title: s.title, type: s.type, url: s.url,
-      category: s.category, status: 'not-started', progress: 0, notes: s.notes, created_at: new Date().toISOString(),
+      category: s.category, status: 'not-started', progress: 0, notes: s.notes, created_at: new Date().toISOString(), task_id: null,
     }
     setResources(prev => [optimistic, ...prev])
     const fd = new FormData()
@@ -365,7 +365,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
                 title: fd.get('title') as string, type: fd.get('type') as ResourceType,
                 url: fd.get('url') as string || null, category: fd.get('category') as string || 'General',
                 status: 'not-started', progress: 0, notes: fd.get('notes') as string || null,
-                created_at: new Date().toISOString(),
+                created_at: new Date().toISOString(), task_id: null,
               }
               setResources(prev => [newR, ...prev])
               setShowForm(false)

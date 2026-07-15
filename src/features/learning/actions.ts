@@ -45,30 +45,60 @@ export async function addResource(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
+  const title = formData.get('title') as string
+
+  // Two-way sync with Planner, same pattern as Coding's daily question and
+  // Trending Reading: insert the task first, then link the resource to it.
+  const { data: task } = await supabase
+    .from('tasks')
+    .insert({ text: `Read: ${title}`, priority: 'low', area: 'Learning', user_id: user.id, done: false })
+    .select('id')
+    .single()
+
   const { error } = await supabase.from('resources').insert({
     user_id: user.id,
-    title: formData.get('title') as string,
+    title,
     type: formData.get('type') as string,
     url: formData.get('url') as string || null,
     category: formData.get('category') as string || 'General',
     status: 'not-started',
     progress: 0,
     notes: formData.get('notes') as string || null,
+    task_id: task?.id ?? null,
   })
   if (error) throw new Error(error.message)
   revalidatePath('/learning')
+  revalidatePath('/planner')
 }
 
 export async function updateResource(id: string, updates: { status?: ResourceStatus; progress?: number; notes?: string }) {
   const supabase = await createClient()
   const { error } = await supabase.from('resources').update(updates).eq('id', id)
   if (error) throw new Error(error.message)
+
+  if (updates.status !== undefined) {
+    const { data: resource } = await supabase.from('resources').select('task_id').eq('id', id).single()
+    if (resource?.task_id) {
+      await supabase.from('tasks').update({ done: updates.status === 'completed' }).eq('id', resource.task_id)
+    }
+  }
+
   revalidatePath('/learning')
+  revalidatePath('/planner')
+  revalidatePath('/dashboard')
 }
 
 export async function deleteResource(id: string) {
   const supabase = await createClient()
+  const { data: resource } = await supabase.from('resources').select('task_id').eq('id', id).single()
+
   const { error } = await supabase.from('resources').delete().eq('id', id)
   if (error) throw new Error(error.message)
+
+  if (resource?.task_id) {
+    await supabase.from('tasks').delete().eq('id', resource.task_id)
+  }
+
   revalidatePath('/learning')
+  revalidatePath('/planner')
 }

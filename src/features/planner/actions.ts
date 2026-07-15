@@ -75,6 +75,14 @@ export async function toggleTask(id: string, done: boolean) {
     .update({ completed: done, completed_at: done ? new Date().toISOString() : null })
     .eq('task_id', id)
 
+  // Same sync for Learning resources — task_id links a resource to its
+  // auto-created "Read: {title}" task (see learning/actions.ts's addResource)
+  if (done) {
+    await supabase.from('resources').update({ status: 'completed', progress: 100 }).eq('task_id', id)
+  } else {
+    await supabase.from('resources').update({ status: 'in-progress' }).eq('task_id', id).eq('status', 'completed')
+  }
+
   // Same sync for the Daily Workout Planner — status is an enum here (not a
   // plain boolean), so map done -> completed / pending. Completing also
   // needs the fuller markWorkoutComplete logic (feeds the workouts log used
@@ -95,6 +103,7 @@ export async function toggleTask(id: string, done: boolean) {
   revalidatePath('/planner')
   revalidatePath('/coding')
   revalidatePath('/health')
+  revalidatePath('/learning')
   revalidatePath('/dashboard')
 }
 

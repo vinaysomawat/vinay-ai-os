@@ -43,7 +43,7 @@ Simple task list. Fields: `text`, `done`, `priority` (high/medium/low), `area` (
 - **Stats row** (Pending / High Priority / Overdue / Completed) above the task list, and a **By Area** panel beside it on wide viewports (`lg:` breakpoint, task list `lg:col-span-3` / panel `lg:col-span-2`) — deterministic counts grouping pending tasks by their `area` field, no AI
 - **Month-scoped Today's Tasks + Overdue**: a task's "relevant month" is its `due_date`'s month if set, else the month it was `created_at` in (most tasks have no `due_date`, so this is effectively "the month it was added"). Today's Tasks only shows tasks whose relevant month is the current month or later; anything left incomplete from a prior month surfaces in a separate, always-visible **Overdue** card instead of lingering in the main list or silently disappearing. The Overdue stat tile and the Plan Coach's context use this same month-relative definition, not just an explicit past `due_date`.
 - **Recurring tasks**: completing a task with `recurrence` set auto-creates the next open instance with the same text/priority/area before marking the current one done
-- **Two-way sync with Coding and Trending Reading**: toggling a task also mirrors `done`/`completed_at` onto the linked row in `coding_daily_questions` and/or `trending_readings` (matched via `task_id`) — see §7 for the full sync mechanics
+- **Two-way sync with Coding, Trending Reading, and Learning**: toggling a task also mirrors `done`/`completed_at` onto the linked row in `coding_daily_questions`, `trending_readings`, and/or `resources` (matched via `task_id`) — see §6/§7 for the full sync mechanics
 - **External links on synced tasks**: a task auto-created by Coding (daily question or trending read) shows a small link-out icon that opens the original question/article directly, so reaching it doesn't require detouring through the Coding page. `getTasks()` (`planner/actions.ts`) does the reverse lookup — `task_id` lives on `coding_daily_questions`/`trending_readings`, not on `tasks` itself — and attaches the resolved URL per task; not stored as a `tasks` column.
 - Pending task rows show their `due_date` when set (red if overdue), and the **By Area** panel below the list shows a proportion bar per area alongside the count
 - **Plan Coach** — `ModuleRecommendations` content registered as the page's AI advisor (see "AI advisor header architecture" under Architecture, below), opened from the header trigger rather than an inline widget
@@ -110,9 +110,10 @@ Daily metrics, a structured Daily Workout Planner, and overall-fitness coaching.
 
 ## 6. Learning (`/learning`)
 
-Resource tracker: `title`, `type` (course/book/video/article/podcast), `url`, `category`, `status` (not-started/in-progress/completed), `progress` (0–100), `notes`.
+Resource tracker: `title`, `type` (course/book/video/article/podcast), `url`, `category`, `status` (not-started/in-progress/completed), `progress` (0–100), `notes`, `task_id`.
 
 - Add / update status+progress+notes / delete
+- **Two-way sync with Planner**: adding a resource creates a linked task (`"Read: {title}"`, low priority, area "Learning") — same pattern as Coding's daily question and Trending Reading. Marking a resource `completed` marks the task done (and sets `progress` to 100); moving it back off `completed` reopens the task. Toggling the task in Planner mirrors back onto the resource's `status`. Deleting a resource deletes its linked task. Only applies to resources added after this sync shipped — existing resources from before keep `task_id = null`, not backfilled.
 - **Status filter defaults to "Not started"** — a merged bucket of `not-started` + `in-progress` (individual resources still show their precise status via each row's own dropdown) — rather than "All", so the page leads with what's actually actionable
 - **Study logs** — `resource_id`, `duration_minutes`, `notes`, `date`; drives a study-streak counter and "minutes this week" stat
 - **Revision nudge ("what am I forgetting")** — deterministic, not AI: a `Needs Revision` card surfaces any `completed` resource with no study-log activity in the last 14 days, with a one-click "+ Log session" action. Same rule is exposed via the Telegram bot ("what needs revision").
@@ -279,7 +280,7 @@ Standard pattern: `user_id uuid references auth.users` + 4 RLS policies (select/
 | `workout_library` | name, category, difficulty, duration_minutes, estimated_calories, primary_muscles, secondary_muscles, equipment, environment, warmup, exercises (jsonb), cardio (jsonb), cooldown, coach_tips, tags — global pool, 55 rows, no `user_id` |
 | `daily_workouts` | workout_id, status (pending/in_progress/completed/skipped), assigned_date, completed_at, task_id (links to `tasks`) |
 | `health_profile` | age, gender, height_cm, target_weight_kg, activity_level, workout_days_per_week, food_preference, goal_deadline (one row/user; target_weight_kg/goal_deadline unused — see §5) |
-| `resources` | title, type, url, category, status, progress, notes |
+| `resources` | title, type, url, category, status, progress, notes, task_id (links to `tasks`) |
 | `study_logs` | date, resource_id, duration_minutes, notes |
 | `coding_questions` | title, difficulty, url, source — global question pool, **no `user_id`** |
 | `coding_daily_questions` | question_id, assigned_date, completed, completed_at, time_spent_minutes, notes, rating, favorite, needs_revision, task_id (links to `tasks`) |
