@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Flame, Trophy, ChevronDown, Play, CheckCircle2, SkipForward, Clock, Zap } from 'lucide-react'
-import { completeWorkout, skipWorkout, beginWorkout } from '../daily-workout'
+import { completeWorkout, skipWorkout, beginWorkout, getActiveOrGenerateWorkout } from '../daily-workout'
 import type { DailyWorkout, WorkoutStats } from '../workout-core'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -40,11 +40,17 @@ export default function DailyWorkoutCard({ initialWorkout, stats }: Props) {
   }
   const handleComplete = () => {
     setWorkout(prev => prev ? { ...prev, status: 'completed' } : prev)
-    startTransition(async () => { await completeWorkout(workout.id) })
+    startTransition(async () => {
+      await completeWorkout(workout.id)
+      setWorkout(await getActiveOrGenerateWorkout())
+    })
   }
   const handleSkip = () => {
     setWorkout(prev => prev ? { ...prev, status: 'skipped' } : prev)
-    startTransition(async () => { await skipWorkout(workout.id) })
+    startTransition(async () => {
+      await skipWorkout(workout.id)
+      setWorkout(await getActiveOrGenerateWorkout())
+    })
   }
 
   const isDone = workout.status === 'completed' || workout.status === 'skipped'

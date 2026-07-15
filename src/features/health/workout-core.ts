@@ -73,6 +73,23 @@ export async function getActiveWorkout(supabase: SupabaseClient, userId: string)
   return (data as unknown as DailyWorkout | null) ?? null
 }
 
+// The most recently completed workout, if it was completed today. Used to
+// keep showing it as "done for the day" instead of generating a fresh one
+// on a same-day reload — skipping bypasses this (see generateWorkoutForUser)
+// since skipping never leaves a completed-today row behind.
+async function getTodayCompleted(supabase: SupabaseClient, userId: string): Promise<DailyWorkout | null> {
+  const { data } = await supabase
+    .from('daily_workouts')
+    .select('*, workout:workout_library(*)')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .gte('completed_at', `${todayStr()}T00:00:00.000Z`)
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (data as unknown as DailyWorkout | null) ?? null
+}
+
 async function getRecentCompleted(supabase: SupabaseClient, userId: string, limit: number): Promise<DailyWorkout[]> {
   const { data } = await supabase
     .from('daily_workouts')
@@ -107,6 +124,9 @@ function pickNextWorkout(pool: Workout[], recentHistory: DailyWorkout[]): Workou
 export async function generateWorkoutForUser(supabase: SupabaseClient, userId: string): Promise<DailyWorkout | null> {
   const existing = await getActiveWorkout(supabase, userId)
   if (existing) return existing
+
+  const completedToday = await getTodayCompleted(supabase, userId)
+  if (completedToday) return completedToday
 
   const [{ data: pool }, recentHistory] = await Promise.all([
     supabase.from('workout_library').select('*'),
