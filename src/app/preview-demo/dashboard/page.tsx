@@ -41,6 +41,12 @@ const dummyData = {
     { emoji: '🎯', text: '1 application in interview stage', href: '/career' },
     { emoji: '💻', text: "Today's coding question still open", href: '/coding' },
   ],
+  todayProgress: { items: [], completed: 4, total: 7, score: 57 },
+  todayRecommendations: [
+    { emoji: '📊', text: "Log today's health metrics", href: '/health' },
+    { emoji: '💻', text: "Solve today's coding question", href: '/coding' },
+    { emoji: '💸', text: "Log today's expenses", href: '/finance' },
+  ],
 }
 
 export default function DashboardPreview() {

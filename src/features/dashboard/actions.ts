@@ -13,6 +13,8 @@ import { checkBudget } from '@/features/finance/signals'
 import { checkQuestionPending, checkStaleRevision } from '@/features/coding/signals'
 import { checkWorkoutPending, checkNoMetricsToday } from '@/features/health/signals'
 import { checkRevisionNeeded } from '@/features/learning/signals'
+import { getTodayTrendingReading } from '@/features/trending/core'
+import { computeTodayProgress, getTodayRecommendations } from './daily-progress'
 
 export interface TopAction {
   emoji: string
@@ -76,6 +78,8 @@ export async function getDashboardData() {
     stats: { pendingTaskCount: 0, activeApplications: 0, workoutsToday: 0, monthSpend: 0, monthBudget: 0, learningInProgress: 0, codingSolved30d: 0, documentCount: 0 },
     aiBudget: { callsToday: 0, costTodayUsd: 0, callsMonth: 0, costMonthUsd: 0, cacheHitRateMonth: 0 },
     topActions: [] as TopAction[],
+    todayProgress: { items: [], completed: 0, total: 0, score: 100 } as ReturnType<typeof computeTodayProgress>,
+    todayRecommendations: [] as ReturnType<typeof getTodayRecommendations>,
   }
 
   const studyLogsSince = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0]
@@ -85,12 +89,12 @@ export async function getDashboardData() {
     expensesRes, budgetsRes, resourcesRes, docsRes,
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
-    codingCompletionsRes, qaRevisionRes,
+    codingCompletionsRes, qaRevisionRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', today),
-    supabase.from('expenses').select('amount').eq('user_id', user.id).gte('date', monthStart),
+    supabase.from('expenses').select('amount, date').eq('user_id', user.id).gte('date', monthStart),
     supabase.from('budgets').select('amount').eq('user_id', user.id).eq('month', today.slice(0, 7)),
     supabase.from('resources').select('id, status').eq('user_id', user.id),
     supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
@@ -106,6 +110,9 @@ export async function getDashboardData() {
     supabase.from('coding_daily_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', true).gte('assigned_date', since30),
     supabase.from('coding_daily_questions').select('question_id, completed, completed_at').eq('user_id', user.id).eq('completed', true),
     supabase.from('interview_qa').select('created_at, last_reviewed_at').eq('user_id', user.id),
+    supabase.from('tasks').select('id, text, done').eq('user_id', user.id).eq('due_date', today),
+    getTodayTrendingReading(supabase, user.id),
+    supabase.from('daily_workouts').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', `${today}T00:00:00.000Z`).limit(1),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -291,6 +298,24 @@ export async function getDashboardData() {
   const qaNeedingRevisionCount = getQAsNeedingRevision(qaRevisionRes.data ?? []).length
   const workoutPending = !!activeWorkout
 
+  const workoutStatus: 'completed' | 'pending' | 'none' =
+    (workoutCompletedTodayRes.data?.length ?? 0) > 0 ? 'completed' : activeWorkout ? 'pending' : 'none'
+  const metricsLoggedToday = !!todayMetric && ['weight_kg', 'calories', 'protein_g', 'steps'].some(f => (todayMetric as Record<string, unknown>)[f] !== null)
+  const studiedToday = (studyLogsRes.data ?? []).some(l => l.date === today)
+  const expenseLoggedToday = (expensesRes.data ?? []).some(e => (e as { date: string }).date === today)
+
+  const todayProgress = computeTodayProgress({
+    tasksDueToday: tasksDueTodayRes.data ?? [],
+    metricsLoggedToday,
+    workoutStatus,
+    codingToday: codingTodayRows,
+    trendingReading: todayTrendingReading,
+    hasLearningResources: resources.length > 0,
+    studiedToday,
+    expenseLoggedToday,
+  })
+  const todayRecommendations = getTodayRecommendations(todayProgress)
+
   const topActions = computeTopActions({
     today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, workoutPending,
     resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, qaNeedingRevisionCount,
@@ -322,5 +347,7 @@ export async function getDashboardData() {
     },
     aiBudget,
     topActions,
+    todayProgress,
+    todayRecommendations,
   }
 }

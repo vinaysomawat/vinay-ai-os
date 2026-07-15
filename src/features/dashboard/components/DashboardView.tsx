@@ -71,7 +71,7 @@ function computeInsights(
 }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
-  const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, todayHealth, aiBudget, topActions } = data
+  const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, todayHealth, aiBudget, topActions, todayProgress, todayRecommendations } = data
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -148,6 +148,34 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </div>
         </div>
       </div>
+
+      {/* Today's Progress — resets to a fresh checklist every midnight, separate from the persistent Life Score above */}
+      <Card title="Today's Progress" padding="p-3" action={<span className="text-xs text-slate-500">{todayProgress.completed}/{todayProgress.total} done</span>}>
+        <div className="flex items-center gap-4">
+          <div className="relative shrink-0">
+            <MiniRing score={todayProgress.score} color="#8b5cf6" />
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums" style={{ color: '#8b5cf6' }}>
+              {todayProgress.score}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            {todayRecommendations.length > 0 ? (
+              <ul className="space-y-0.5">
+                {todayRecommendations.map(r => (
+                  <li key={r.text}>
+                    <Link href={r.href} className="flex items-center gap-2 py-0.5 text-sm text-slate-400 hover:text-accent transition-colors">
+                      <span className="shrink-0">{r.emoji}</span>
+                      <span className="truncate">{r.text}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400">Everything for today is done 🎉</p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Today's Focus + Insights side by side — both are short scannable lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
