@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, CheckCircle2, Circle, Trash2, Sparkles } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, Sparkles, ExternalLink } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
@@ -69,6 +69,7 @@ export default function PlannerView({ initialTasks }: Props) {
       due_date: null,
       recurrence,
       created_at: new Date().toISOString(),
+      external_url: null,
     }
 
     startTransition(async () => {
@@ -193,6 +194,12 @@ export default function PlannerView({ initialTasks }: Props) {
                   )}
                 </div>
               </div>
+              {task.external_url && (
+                <a href={task.external_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  className="shrink-0 text-slate-600 hover:text-accent transition-colors">
+                  <ExternalLink size={13} />
+                </a>
+              )}
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority]}`} />
               <button
                 onClick={() => handleDelete(task.id)}

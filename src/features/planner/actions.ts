@@ -6,12 +6,26 @@ import type { Priority, Recurrence } from './types'
 
 export async function getTasks() {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [tasksRes, codingRes, readingRes] = await Promise.all([
+    supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+    supabase.from('coding_daily_questions').select('task_id, question:coding_questions(url)').not('task_id', 'is', null),
+    supabase.from('trending_readings').select('task_id, url').not('task_id', 'is', null),
+  ])
 
-  if (error) throw new Error(error.message)
+  if (tasksRes.error) throw new Error(tasksRes.error.message)
+
+  // External link for tasks auto-created by Coding (daily question / trending
+  // read) — task_id lives on those tables, not on tasks itself, so build a
+  // reverse lookup instead of storing a redundant column on every task.
+  const linkByTaskId = new Map<string, string>()
+  for (const row of (codingRes.data ?? []) as unknown as { task_id: string | null; question: { url: string | null } | null }[]) {
+    if (row.task_id && row.question?.url) linkByTaskId.set(row.task_id, row.question.url)
+  }
+  for (const row of (readingRes.data ?? []) as { task_id: string | null; url: string | null }[]) {
+    if (row.task_id && row.url) linkByTaskId.set(row.task_id, row.url)
+  }
+
+  const data = (tasksRes.data ?? []).map(t => ({ ...t, external_url: linkByTaskId.get(t.id) ?? null }))
   return data
 }
 

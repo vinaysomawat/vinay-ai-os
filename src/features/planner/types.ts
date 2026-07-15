@@ -11,4 +11,7 @@ export interface Task {
   due_date: string | null
   recurrence: Recurrence | null
   created_at: string
+  // The linked coding question's / trending article's URL, when this task
+  // was auto-created by Coding — not a tasks column, attached in getTasks().
+  external_url: string | null
 }

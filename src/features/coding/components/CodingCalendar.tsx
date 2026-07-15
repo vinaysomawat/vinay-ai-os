@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { CalendarDay } from '../daily-core'
 
-const STATUS_COLOR: Record<CalendarDay['status'], string> = {
-  solved: 'bg-green-500/80 text-white',
-  partial: 'bg-amber-500/60 text-white',
-  missed: 'bg-red-500/30 text-red-200',
-  none: 'bg-surface-2 text-slate-600',
+const DOT_COLOR: Record<CalendarDay['status'], string> = {
+  solved: 'bg-green-500',
+  partial: 'bg-amber-500/70',
+  missed: 'bg-red-500/40',
+  none: 'bg-surface-3',
 }
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -58,16 +58,16 @@ export default function CodingCalendar({ days }: { days: CalendarDay[] }) {
           <ChevronRight size={16} />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1">
-        {DOW.map((d, i) => <div key={i} className="text-center text-xs text-slate-600 pb-1">{d}</div>)}
+      <div className="grid grid-cols-7 gap-y-1">
+        {DOW.map((d, i) => <div key={i} className="text-center text-[10px] text-slate-600">{d}</div>)}
         {cells.map((dateStr, i) => {
           if (!dateStr) return <div key={i} />
           const status = byDate.get(dateStr) ?? 'none'
           const dayNum = parseInt(dateStr.slice(-2), 10)
           return (
-            <div key={i} title={`${dateStr}: ${status}`}
-              className={`aspect-square rounded-md flex items-center justify-center text-xs font-medium ${STATUS_COLOR[status]}`}>
-              {dayNum}
+            <div key={i} title={`${dateStr}: ${status}`} className="flex flex-col items-center gap-0.5 py-0.5">
+              <span className={`w-2.5 h-2.5 rounded-full ${DOT_COLOR[status]}`} />
+              <span className="text-[9px] text-slate-600 leading-none">{dayNum}</span>
             </div>
           )
         })}
