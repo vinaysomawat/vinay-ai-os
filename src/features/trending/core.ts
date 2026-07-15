@@ -7,6 +7,13 @@ const KEYWORDS = [
   'ui', 'ux', 'design system', 'tailwind', 'vite', 'webassembly', 'node.js', 'nodejs',
   'ai', 'llm', 'claude', 'anthropic', 'gpt', 'openai', 'chatgpt', 'copilot', 'cursor',
   'agent', 'agentic', 'machine learning', 'ml model', 'neural',
+  // Frontend system design — Staff-level interview prep territory (matches
+  // career/suggested-questions.ts's System Design topic), kept specific
+  // rather than bare "architecture"/"scale" to avoid pulling in unrelated
+  // hardware/backend-only HN stories.
+  'system design', 'frontend architecture', 'software architecture', 'web architecture',
+  'micro-frontend', 'microfrontend', 'micro frontend', 'monorepo', 'distributed systems',
+  'scalability', 'api design', 'state management', 'caching strategy', 'cdn',
 ]
 
 interface HNHit {
