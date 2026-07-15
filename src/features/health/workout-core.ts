@@ -53,8 +53,26 @@ const HISTORY_LIMIT = 7
 // muscle groups get proper recovery time before being trained again.
 const RECENT_CATEGORY_AVOID_WINDOW = 2
 
+// IST is UTC+5:30. The rest of the app's day boundaries (coding streaks,
+// daily tips, AI budget resets) are UTC-based, but the workout "done for
+// the day" gate specifically needs India's calendar day, not UTC's — a
+// workout completed between midnight and 5:30am IST is still "today" in
+// IST while UTC's date hasn't rolled over yet, and vice versa in the
+// evening. Scoped to this file rather than changing the whole app's date
+// handling, which nothing else here currently depends on.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+
 function todayStr() {
-  return new Date().toISOString().split('T')[0]
+  return new Date(Date.now() + IST_OFFSET_MS).toISOString().split('T')[0]
+}
+
+// The UTC instant corresponding to the start of "today" in IST — for
+// comparing against timestamptz columns like completed_at, where a plain
+// date-string boundary would silently assume UTC midnight instead.
+function istMidnightUtc(): string {
+  const istNow = new Date(Date.now() + IST_OFFSET_MS)
+  const istMidnightAsUtc = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate())
+  return new Date(istMidnightAsUtc - IST_OFFSET_MS).toISOString()
 }
 
 // The single active workout — status pending or in_progress. Unlike the
@@ -83,7 +101,7 @@ async function getTodayCompleted(supabase: SupabaseClient, userId: string): Prom
     .select('*, workout:workout_library(*)')
     .eq('user_id', userId)
     .eq('status', 'completed')
-    .gte('completed_at', `${todayStr()}T00:00:00.000Z`)
+    .gte('completed_at', istMidnightUtc())
     .order('completed_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -222,14 +240,17 @@ export async function computeWorkoutStats(supabase: SupabaseClient, userId: stri
   const recentCategories = rows.map(r => r.workout?.category).filter(Boolean)
 
   // Streak: consecutive calendar days (walking back from today) with at
-  // least one completed workout.
-  const completedDates = new Set(rows.map(r => r.completed_at?.split('T')[0]).filter(Boolean))
+  // least one completed workout. IST-based to match todayStr()/assigned_date
+  // above — otherwise a workout completed just after IST midnight (still
+  // "yesterday" in UTC until 5:30am) would silently break the streak.
+  const toIstDateStr = (iso: string) => new Date(new Date(iso).getTime() + IST_OFFSET_MS).toISOString().split('T')[0]
+  const completedDates = new Set(rows.map(r => r.completed_at ? toIstDateStr(r.completed_at) : null).filter((d): d is string => d !== null))
   let currentStreakDays = 0
-  const cursor = new Date()
+  const cursor = new Date(Date.now() + IST_OFFSET_MS)
   for (let i = 0; i < 3650; i++) {
     const d = cursor.toISOString().split('T')[0]
-    if (completedDates.has(d)) { currentStreakDays++; cursor.setDate(cursor.getDate() - 1) }
-    else if (i === 0) { cursor.setDate(cursor.getDate() - 1) }
+    if (completedDates.has(d)) { currentStreakDays++; cursor.setUTCDate(cursor.getUTCDate() - 1) }
+    else if (i === 0) { cursor.setUTCDate(cursor.getUTCDate() - 1) }
     else break
   }
 
