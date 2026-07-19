@@ -19,9 +19,10 @@ interface Props {
   codingSettings: CodingSettings
   history: DailyQuestion[]
   trendingReading: TrendingReading | null
+  readingHistory: TrendingReading[]
 }
 
-export default function CodingView({ dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading }: Props) {
+export default function CodingView({ dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading, readingHistory }: Props) {
   const codingContext = `Current streak: ${codingStats.currentStreak}d (longest: ${codingStats.longestStreak}d). Total solved: ${codingStats.totalSolved} (${codingStats.easySolved} easy, ${codingStats.mediumSolved} medium, ${codingStats.hardSolved} hard). Completion rate: ${codingStats.completionRate}%.`
 
   const advisorOpen = useAIAdvisorOpen()
@@ -45,7 +46,7 @@ export default function CodingView({ dailyAssignment, codingStats, calendar, cod
         <CodingCalendar days={calendar} />
       </Card>
 
-      <QuestionHistory initialHistory={history} trendingReading={trendingReading} />
+      <QuestionHistory initialHistory={history} readingHistory={readingHistory} />
     </div>
   )
 }

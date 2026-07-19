@@ -18,28 +18,30 @@ type Filter = 'all' | 'completed' | 'pending' | 'revision' | 'favorites' | 'easy
 
 interface Props {
   initialHistory: DailyQuestion[]
-  trendingReading?: TrendingReading | null
+  readingHistory?: TrendingReading[]
 }
 
-export default function QuestionHistory({ initialHistory, trendingReading }: Props) {
+export default function QuestionHistory({ initialHistory, readingHistory }: Props) {
   const [history, setHistory] = useState(initialHistory)
-  const [reading, setReading] = useState(trendingReading ?? null)
+  const [readings, setReadings] = useState(readingHistory ?? [])
   const [filter, setFilter] = useState<Filter>('pending')
   const [, startTransition] = useTransition()
 
   // The daily "Read" isn't a coding question — it has no difficulty,
   // favorite, or revision concept — so it only ever surfaces under the
-  // filters where "pending/completed" actually means something.
-  const showReading = !!reading && (
-    filter === 'all' ||
-    (filter === 'pending' && !reading.completed) ||
-    (filter === 'completed' && reading.completed)
-  )
+  // filters where "pending/completed" actually means something. Includes
+  // every unfinished day's reading, not just today's, so an unread article
+  // doesn't silently vanish from the queue once its day passes.
+  const filteredReadings = readings.filter(r => {
+    if (filter === 'all') return true
+    if (filter === 'completed') return r.completed
+    if (filter === 'pending') return !r.completed
+    return false
+  })
 
-  const handleReadingComplete = () => {
-    if (!reading || reading.completed) return
-    setReading(r => r ? { ...r, completed: true } : r)
-    startTransition(async () => { await completeReading(reading.id) })
+  const handleReadingComplete = (id: string) => {
+    setReadings(prev => prev.map(r => r.id === id ? { ...r, completed: true } : r))
+    startTransition(async () => { await completeReading(id) })
   }
 
   const filtered = history.filter(h => {
@@ -73,7 +75,7 @@ export default function QuestionHistory({ initialHistory, trendingReading }: Pro
   ]
 
   return (
-    <Card title="Question History">
+    <Card title="Practice Log">
       <div className="flex gap-1.5 flex-wrap mb-4">
         {filters.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
@@ -82,18 +84,18 @@ export default function QuestionHistory({ initialHistory, trendingReading }: Pro
           </button>
         ))}
       </div>
-      {filtered.length === 0 && !showReading ? (
+      {filtered.length === 0 && filteredReadings.length === 0 ? (
         <p className="text-sm text-slate-600 text-center py-6">No questions match this filter.</p>
       ) : (
         <ul className="space-y-1.5 max-h-96 overflow-y-auto">
-          {showReading && reading && (
-            <li className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+          {filteredReadings.map(reading => (
+            <li key={reading.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
               <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0 text-accent bg-accent/15 flex items-center gap-1">
                 <Newspaper size={10} /> Read
               </span>
               <span className={`flex-1 min-w-0 text-sm truncate ${reading.completed ? 'text-slate-400' : 'text-slate-300'}`}>{reading.title}</span>
               <span className="text-xs text-slate-600 shrink-0">{reading.assigned_date}</span>
-              <button onClick={handleReadingComplete} disabled={reading.completed}
+              <button onClick={() => handleReadingComplete(reading.id)} disabled={reading.completed}
                 className={`shrink-0 transition-colors ${reading.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
                 {reading.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
               </button>
@@ -101,7 +103,7 @@ export default function QuestionHistory({ initialHistory, trendingReading }: Pro
                 <ExternalLink size={13} />
               </a>
             </li>
-          )}
+          ))}
           {filtered.map(h => (
             <li key={h.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_COLOR[h.question.difficulty]}`}>{h.question.difficulty}</span>

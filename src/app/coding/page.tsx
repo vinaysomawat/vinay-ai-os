@@ -1,15 +1,16 @@
 import CodingView from '@/features/coding/components/CodingView'
 import { getTodayAssignment, getCodingStats, getCodingCalendarData, getCodingSettings, getAssignmentHistory } from '@/features/coding/daily'
-import { getTodayReading } from '@/features/trending/actions'
+import { getTodayReading, getReadingHistory } from '@/features/trending/actions'
 
 export default async function CodingPage() {
-  const [dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading] = await Promise.all([
+  const [dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading, readingHistory] = await Promise.all([
     getTodayAssignment(),
     getCodingStats(),
     getCodingCalendarData(),
     getCodingSettings(),
     getAssignmentHistory(),
     getTodayReading(),
+    getReadingHistory(),
   ])
   return (
     <CodingView
@@ -19,6 +20,7 @@ export default async function CodingPage() {
       codingSettings={codingSettings}
       history={history}
       trendingReading={trendingReading}
+      readingHistory={readingHistory}
     />
   )
 }
