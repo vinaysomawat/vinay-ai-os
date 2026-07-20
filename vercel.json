@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/job-alerts",
       "schedule": "35 3 * * *"
+    },
+    {
+      "path": "/api/cron/learning-tip",
+      "schedule": "45 3 * * *"
     }
   ]
 }
