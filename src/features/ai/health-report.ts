@@ -53,7 +53,7 @@ export async function getDailyHealthPlan(
     ? `His BMI is ${plan.bmi} (normal range tops out at 24.9, ~${plan.normalBmiWeightKg}kg at his height) — today's targets carry a modest ~${plan.weeklyLossKg}kg/week deficit toward that, not a crash diet.`
     : `His BMI is ${plan.bmi}, already in the normal range — today's targets are maintenance, not a deficit.`
 
-  const prompt = `Vinay's daily health plan for today. His goal: get fit — a gradual, sustainable calorie deficit toward a normal BMI, not a crash diet or an arbitrary weight-loss deadline. ${bmiNote}
+  const prompt = `Vinay's daily health plan for today (${today}). His goal: get fit — a gradual, sustainable calorie deficit toward a normal BMI, not a crash diet or an arbitrary weight-loss deadline. ${bmiNote}
 
 Today's targets: ${plan.dailyCalorieTarget} kcal, ${plan.proteinTargetG}g protein, ${plan.carbsG}g carbs, ${plan.fatG}g fat.
 

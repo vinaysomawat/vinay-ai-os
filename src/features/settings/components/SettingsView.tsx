@@ -3,12 +3,15 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, Bell, LogOut, Sparkles, Download, Activity } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
+import FieldError from '@/components/FieldError'
 import { signout } from '@/app/login/actions'
 import { todayIST } from '@/lib/date'
 import { addReminder, deleteReminder, exportAllData } from '../actions'
 import { REMINDER_MODULES } from '../types'
 import type { Reminder, ReminderSlot } from '../types'
 import type { CronJobHealth } from '@/lib/cron-log'
+import { useEscapeKey } from '@/lib/use-escape-key'
 
 const MODULE_LABEL: Record<string, string> = {
   planner: 'Planner', career: 'Career', finance: 'Finance', health: 'Health',
@@ -54,6 +57,7 @@ interface Props {
 
 export default function SettingsView({ email, initialReminders, aiBudget, systemHealth }: Props) {
   const [showForm, setShowForm] = useState(false)
+  useEscapeKey(() => setShowForm(false))
   const [label, setLabel] = useState('')
   const [slot, setSlot] = useState<ReminderSlot>('morning')
   const [module, setModule] = useState('planner')
@@ -68,8 +72,10 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
     }
   )
 
+  const [labelInvalid, setLabelInvalid] = useState(false)
+
   const handleAdd = () => {
-    if (!label.trim()) return
+    if (!label.trim()) { setLabelInvalid(true); return }
     const text = label.trim()
     const optimistic: Reminder = {
       id: `temp-${Date.now()}`, user_id: '', module, label: text, slot, active: true, created_at: new Date().toISOString(),
@@ -204,7 +210,7 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
       }>
         <p className="text-xs text-slate-600 mb-3">Delivered via Telegram at the morning briefing (~8:30am IST) or evening check-in (~8pm IST).</p>
         {reminders.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No reminders set — add one above</p>
+          <EmptyState icon={Bell} message="No reminders set — add one above" />
         ) : (
           <ul className="space-y-1.5">
             {reminders.map(r => (
@@ -214,7 +220,7 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
                   <p className="text-sm text-slate-200">{r.label}</p>
                   <p className="text-xs text-slate-600 mt-0.5">{r.slot === 'morning' ? 'Every morning' : 'Every evening'} · {MODULE_LABEL[r.module] ?? r.module}</p>
                 </div>
-                <button onClick={() => handleDelete(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                <button onClick={() => handleDelete(r.id)} aria-label="Delete reminder" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                   <Trash2 size={13} />
                 </button>
               </li>
@@ -225,16 +231,17 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
 
       {showForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">New Reminder</h2>
-              <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-slate-300">✕</button>
+              <button onClick={() => setShowForm(false)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300">✕</button>
             </div>
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleAdd() }}>
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">What to be reminded about</label>
-                <input value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Log my weight" autoFocus
-                  className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                <input value={label} onChange={e => { setLabel(e.target.value); setLabelInvalid(false) }} placeholder="Log my weight" autoFocus
+                  className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${labelInvalid ? 'border-red-500' : 'border-surface-3'}`} />
+                <FieldError show={labelInvalid} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -254,10 +261,10 @@ export default function SettingsView({ email, initialReminders, aiBudget, system
                 </div>
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                <button onClick={handleAdd} disabled={!label.trim()} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">Add Reminder</button>
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                <button type="submit" disabled={!label.trim()} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 active:scale-95 transition">Add Reminder</button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

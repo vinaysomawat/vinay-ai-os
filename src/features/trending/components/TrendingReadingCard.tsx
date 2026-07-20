@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { CheckCircle2, Circle, ExternalLink, Newspaper } from 'lucide-react'
+import EmptyState from '@/components/EmptyState'
 import { completeReading } from '../actions'
 import type { TrendingReading } from '../types'
 
@@ -23,10 +24,10 @@ export default function TrendingReadingCard({ initialReading }: { initialReading
       </div>
 
       {!reading ? (
-        <p className="text-sm text-slate-600 text-center py-4">No article available today — check back tomorrow.</p>
+        <EmptyState icon={Newspaper} message="No article available today — check back tomorrow." compact />
       ) : (
         <div className="flex items-center gap-3">
-          <button onClick={handleComplete} disabled={isPending || reading.completed} className="shrink-0">
+          <button onClick={handleComplete} disabled={isPending || reading.completed} aria-label="Mark reading complete" className="p-1.5 -m-1.5 shrink-0">
             {reading.completed ? <CheckCircle2 size={18} className="text-green-500" /> : <Circle size={18} className="text-slate-600 hover:text-accent transition-colors" />}
           </button>
           <div className="flex-1 min-w-0">

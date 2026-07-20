@@ -9,9 +9,9 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
   return (
     <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
       <AlertCircle size={32} className="text-red-400 opacity-60" />
-      <div className="text-center">
+      <div className="text-center max-w-sm">
         <p className="text-sm font-medium text-slate-300">Something went wrong</p>
-        <p className="text-xs text-slate-600 mt-1">{error.message}</p>
+        <p className="text-xs text-slate-600 mt-1">This page hit an unexpected error. Try again — if it keeps happening, check the browser console for details.</p>
       </div>
       <button
         onClick={reset}

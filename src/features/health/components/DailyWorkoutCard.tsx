@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Flame, Trophy, ChevronDown, Play, CheckCircle2, SkipForward, Clock, Zap } from 'lucide-react'
+import { Flame, Trophy, ChevronDown, Play, CheckCircle2, SkipForward, Clock, Zap, Dumbbell } from 'lucide-react'
+import EmptyState from '@/components/EmptyState'
 import { completeWorkout, skipWorkout, beginWorkout, getActiveOrGenerateWorkout } from '../daily-workout'
 import type { DailyWorkout, WorkoutStats } from '../workout-core'
 
@@ -26,7 +27,7 @@ export default function DailyWorkoutCard({ initialWorkout, stats }: Props) {
     return (
       <div className="bg-surface-1 border border-surface-3 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Today&apos;s Workout</h2>
-        <p className="text-sm text-slate-600 text-center py-6">No workout library found yet — run the pending migration to get started.</p>
+        <EmptyState icon={Dumbbell} message="No workout library found yet — run the pending migration to get started." />
       </div>
     )
   }

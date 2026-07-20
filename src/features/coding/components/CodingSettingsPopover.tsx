@@ -27,7 +27,7 @@ export default function CodingSettingsPopover({ initialSettings }: { initialSett
           <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">Coding Settings</h2>
-              <button onClick={() => setOpen(false)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
             <div className="space-y-4">
               <div className="space-y-1.5">

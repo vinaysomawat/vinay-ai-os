@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff, RotateCcw, Lightbulb } from 'lucide-react'
+import { useState, useEffect, useTransition } from 'react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Pencil, Check, Wand2, FileText, Star, Eye, EyeOff, RotateCcw, Lightbulb, Award, HelpCircle, Briefcase } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
+import FilterPill from '@/components/FilterPill'
 import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import { todayIST } from '@/lib/date'
 import {
@@ -16,6 +18,9 @@ import { getQAsNeedingRevision } from '../calculations'
 import { SUGGESTED_QUESTIONS } from '../suggested-questions'
 import type { Application, AppStatus, CareerProfile, Skill, InterviewQA, SkillLevel, Difficulty, ResumeVersion } from '../types'
 import { SKILL_CATEGORIES, SKILL_LEVEL_CONFIG, DIFFICULTY_CONFIG, QA_TOPICS } from '../types'
+import { useEscapeKey } from '@/lib/use-escape-key'
+import { useFormValidation } from '@/lib/use-form-validation'
+import FieldError from '@/components/FieldError'
 
 const STATUS_CONFIG: Record<AppStatus, { label: string; color: string; bg: string }> = {
   applied:   { label: 'Applied',   color: 'text-blue-400',   bg: 'bg-blue-400/10' },
@@ -38,7 +43,7 @@ function ProfileField({ label, value, onSave, type = 'text', placeholder, masked
     <div>
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs text-slate-500 uppercase tracking-wider">{label}</p>
-        <button onClick={() => setRevealed(true)} className="text-slate-600 hover:text-slate-400 transition-colors">
+        <button onClick={() => setRevealed(true)} aria-label="Reveal value" className="p-1.5 -m-1.5 text-slate-600 hover:text-slate-400 transition-colors">
           <Eye size={11} />
         </button>
       </div>
@@ -51,7 +56,7 @@ function ProfileField({ label, value, onSave, type = 'text', placeholder, masked
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs text-slate-500 uppercase tracking-wider">{label}</p>
         {masked && (
-          <button onClick={() => setRevealed(false)} className="text-slate-600 hover:text-slate-400 transition-colors">
+          <button onClick={() => setRevealed(false)} aria-label="Hide value" className="p-1.5 -m-1.5 text-slate-600 hover:text-slate-400 transition-colors">
             <EyeOff size={11} />
           </button>
         )}
@@ -71,8 +76,8 @@ function ProfileField({ label, value, onSave, type = 'text', placeholder, masked
         <input value={input} onChange={e => setInput(e.target.value)} type={type} placeholder={placeholder}
           onKeyDown={e => { if (e.key === 'Enter') { onSave(input); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
           autoFocus className="flex-1 bg-surface-2 border border-accent rounded px-2 py-1 text-sm text-slate-200 outline-none" />
-        <button onClick={() => { onSave(input); setEditing(false) }} className="text-green-400 shrink-0"><Check size={12} /></button>
-        <button onClick={() => setEditing(false)} className="text-slate-600 shrink-0"><X size={12} /></button>
+        <button onClick={() => { onSave(input); setEditing(false) }} aria-label="Save" className="p-1.5 -m-1.5 text-green-400 shrink-0"><Check size={12} /></button>
+        <button onClick={() => setEditing(false)} aria-label="Cancel edit" className="p-1.5 -m-1.5 text-slate-600 shrink-0"><X size={12} /></button>
       </div>
     </div>
   )
@@ -101,6 +106,9 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
   const [filterStatus, setFilterStatus] = useState<AppStatus | 'all'>('all')
   const [filterTopic, setFilterTopic] = useState<string>('all')
   const [modal, setModal] = useState<'app' | 'skill' | 'qa' | 'generate' | 'resume' | null>(null)
+  useEscapeKey(() => setModal(null))
+  const { invalidFields, validate, clear, onFieldInput } = useFormValidation()
+  useEffect(() => clear(), [modal, clear])
   const [expandedQA, setExpandedQA] = useState<string | null>(null)
   const [editingAnswer, setEditingAnswer] = useState<string | null>(null)
   const [answerInput, setAnswerInput] = useState('')
@@ -228,7 +236,8 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
       </div>
       <div className="flex gap-2">
         <input value={mentorQ} onChange={e => setMentorQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAsk()}
-          placeholder="Am I ready for a promotion? What should I learn next?" className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+          placeholder="Am I ready for a promotion? What should I learn next?" disabled={mentorLoading}
+          className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
         <button onClick={handleAsk} disabled={mentorLoading || !mentorQ.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
           {mentorLoading ? '...' : 'Ask'}
         </button>
@@ -303,7 +312,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                     Set primary
                   </button>
                 )}
-                <button onClick={() => handleDeleteResume(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                <button onClick={() => handleDeleteResume(r.id)} aria-label="Delete resume version" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                   <Trash2 size={13} />
                 </button>
               </li>
@@ -319,7 +328,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
         </button>
       }>
         {localSkills.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-4">No skills added — click the level badge to cycle between levels</p>
+          <EmptyState icon={Award} message="No skills added — click the level badge to cycle between levels" compact cta={{ label: 'Add skill', onClick: () => setModal('skill') }} />
         ) : (
           <div className="space-y-2">
             {Object.entries(skillsByCategory).map(([cat, catSkills]) => (
@@ -334,7 +343,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                         <button onClick={() => cycleLevel(skill)} title="Click to change level" className={`text-xs px-1.5 py-0.5 rounded-full font-medium transition-colors ${lvl.color}`}>
                           {lvl.label}
                         </button>
-                        <button onClick={() => handleDeleteSkill(skill.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all ml-0.5">
+                        <button onClick={() => handleDeleteSkill(skill.id)} aria-label="Delete skill" className="p-1 -m-1 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                           <X size={10} />
                         </button>
                       </div>
@@ -422,15 +431,12 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
         {/* Topic filter */}
         <div className="flex gap-1.5 flex-wrap mb-4">
           {['all', ...QA_TOPICS].map(t => (
-            <button key={t} onClick={() => setFilterTopic(t)}
-              className={`text-xs px-2.5 py-1 rounded-lg transition-colors ${filterTopic === t ? 'bg-accent text-white' : 'bg-surface-2 text-slate-500 hover:text-slate-300'}`}>
-              {t === 'all' ? 'All' : t}
-            </button>
+            <FilterPill key={t} label={t === 'all' ? 'All' : t} active={filterTopic === t} onClick={() => setFilterTopic(t)} />
           ))}
         </div>
 
         {filteredQA.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No questions yet — add manually or use AI Generate</p>
+          <EmptyState icon={HelpCircle} message="No questions yet — add manually or use AI Generate" cta={{ label: 'Add', onClick: () => setModal('qa') }} />
         ) : (
           <ul className="space-y-2">
             {filteredQA.map(item => {
@@ -440,7 +446,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
               return (
                 <li key={item.id} className="border border-surface-3 rounded-lg overflow-hidden group">
                   <div className="flex items-start gap-3 p-3 hover:bg-surface-2 transition-colors">
-                    <button onClick={() => setExpandedQA(isExpanded ? null : item.id)} className="mt-0.5 text-slate-600 hover:text-slate-400 shrink-0">
+                    <button onClick={() => setExpandedQA(isExpanded ? null : item.id)} aria-label={isExpanded ? 'Collapse answer' : 'Expand answer'} className="mt-0.5 text-slate-600 hover:text-slate-400 shrink-0">
                       <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                     </button>
                     <div className="flex-1 min-w-0">
@@ -451,7 +457,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                         {item.answer && <span className="text-xs text-green-500/70">✓ answered</span>}
                       </div>
                     </div>
-                    <button onClick={() => handleDeleteQA(item.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all shrink-0">
+                    <button onClick={() => handleDeleteQA(item.id)} aria-label="Delete question" className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all shrink-0">
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -513,7 +519,9 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
             <Plus size={12} /> Add
           </button>
         }>
-          {filtered.length === 0 && <p className="text-sm text-slate-600 text-center py-8">{filterStatus === 'all' ? 'No applications yet' : `No ${STATUS_CONFIG[filterStatus].label.toLowerCase()} applications`}</p>}
+          {filtered.length === 0 && (
+            <EmptyState icon={Briefcase} message={filterStatus === 'all' ? 'No applications yet' : `No ${STATUS_CONFIG[filterStatus].label.toLowerCase()} applications`} cta={filterStatus === 'all' ? { label: 'Add', onClick: () => setModal('app') } : undefined} />
+          )}
           <ul className="space-y-2">
             {filtered.map(app => {
               const cfg = STATUS_CONFIG[app.status]
@@ -543,7 +551,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                     </div>
                     {app.notes && <p className="text-xs text-slate-500 mt-1.5 line-clamp-1">{app.notes}</p>}
                   </div>
-                  <button onClick={() => handleDeleteApp(app.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all mt-0.5"><Trash2 size={13} /></button>
+                  <button onClick={() => handleDeleteApp(app.id)} aria-label="Delete application" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all mt-0.5"><Trash2 size={13} /></button>
                 </li>
               )
             })}
@@ -555,17 +563,18 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
       {/* Modals */}
       {modal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">
                 {modal === 'app' ? 'Add Application' : modal === 'skill' ? 'Add Skill' : modal === 'qa' ? 'Add Question' : modal === 'resume' ? 'Add Resume Version' : 'Generate Interview Questions'}
               </h2>
-              <button onClick={() => setModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
 
             {modal === 'skill' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const category = fd.get('category') as string
@@ -577,7 +586,8 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Skill name</label>
-                  <input name="name" required autoFocus placeholder="TypeScript, Playwright, React..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="name" required autoFocus placeholder="TypeScript, Playwright, React..." className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('name') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('name')} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
@@ -595,14 +605,15 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Skill</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Skill</button>
                 </div>
               </form>
             )}
 
             {modal === 'qa' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const question = fd.get('question') as string
                 const answer = fd.get('answer') as string || null
@@ -615,7 +626,8 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Question</label>
-                  <textarea name="question" required autoFocus rows={3} placeholder="What is the difference between..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
+                  <textarea name="question" required autoFocus rows={3} placeholder="What is the difference between..." className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none ${invalidFields.has('question') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('question')} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Answer (optional — add later)</label>
@@ -637,7 +649,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
                 </div>
               </form>
             )}
@@ -667,7 +679,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors flex items-center justify-center gap-1.5">
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition flex items-center justify-center gap-1.5">
                     <Wand2 size={12} /> Generate 5 Questions
                   </button>
                 </div>
@@ -675,8 +687,9 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
             )}
 
             {modal === 'app' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const newApp: Application = {
                   id: `temp-${Date.now()}`, user_id: '',
@@ -697,11 +710,13 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Company *</label>
-                    <input name="company" required autoFocus placeholder="Google" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="company" required autoFocus placeholder="Google" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('company') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('company')} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Role *</label>
-                    <input name="role" required placeholder="Senior Engineer" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="role" required placeholder="Senior Engineer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('role') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('role')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -745,14 +760,15 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Application</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Application</button>
                 </div>
               </form>
             )}
 
             {modal === 'resume' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const content = fd.get('content') as string || null
@@ -770,7 +786,8 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Name *</label>
-                  <input name="name" required autoFocus placeholder="Staff FE — Google focus" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="name" required autoFocus placeholder="Staff FE — Google focus" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('name') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('name')} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Link (Google Doc, PDF, etc.)</label>
@@ -786,7 +803,7 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Resume</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Resume</button>
                 </div>
               </form>
             )}

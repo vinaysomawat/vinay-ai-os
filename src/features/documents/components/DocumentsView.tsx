@@ -2,6 +2,7 @@
 
 import { useState, useOptimistic, useTransition } from 'react'
 import { Plus, Trash2, X, Search, FileText, Sparkles, Send } from 'lucide-react'
+import EmptyState from '@/components/EmptyState'
 import { addDocument, updateDocument, deleteDocument } from '../actions'
 import { askDocument, summariseDocument } from '@/features/ai/doc-qa'
 import type { Document } from '../types'
@@ -18,7 +19,7 @@ export default function DocumentsView({ initialDocuments }: Props) {
   const [isPending, startTransition] = useTransition()
   const [aiQuestion, setAiQuestion] = useState('')
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
+  const [aiAction, setAiAction] = useState<'ask' | 'summarise' | null>(null)
 
   const [docs, updateDocs] = useOptimistic(
     initialDocuments,
@@ -82,26 +83,26 @@ export default function DocumentsView({ initialDocuments }: Props) {
 
   const handleAsk = async () => {
     if (!editContent || !aiQuestion.trim()) return
-    setAiLoading(true)
+    setAiAction('ask')
     setAiAnswer(null)
     try {
       const answer = await askDocument(editTitle, editContent, aiQuestion)
       setAiAnswer(answer)
     } finally {
-      setAiLoading(false)
+      setAiAction(null)
     }
   }
 
   const handleSummarise = async () => {
     if (!editContent) return
-    setAiLoading(true)
+    setAiAction('summarise')
     setAiAnswer(null)
     setAiQuestion('Summarise this document')
     try {
       const summary = await summariseDocument(editTitle, editContent)
       setAiAnswer(summary)
     } finally {
-      setAiLoading(false)
+      setAiAction(null)
     }
   }
 
@@ -118,7 +119,7 @@ export default function DocumentsView({ initialDocuments }: Props) {
           <Plus size={13} /> New document
         </button>
         <div className="flex-1 overflow-y-auto space-y-1">
-          {filtered.length === 0 && <p className="text-xs text-slate-600 text-center py-6">No documents</p>}
+          {filtered.length === 0 && <EmptyState icon={FileText} message="No documents" compact />}
           {filtered.map(doc => (
             <div key={doc.id} role="button" tabIndex={0} onClick={() => openDoc(doc)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDoc(doc) } }}
@@ -137,7 +138,7 @@ export default function DocumentsView({ initialDocuments }: Props) {
                     </div>
                   )}
                 </div>
-                <button onClick={e => { e.stopPropagation(); handleDelete(doc.id) }}
+                <button onClick={e => { e.stopPropagation(); handleDelete(doc.id) }} aria-label="Delete document"
                   className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all shrink-0">
                   <Trash2 size={12} />
                 </button>
@@ -155,7 +156,9 @@ export default function DocumentsView({ initialDocuments }: Props) {
               <input
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (showForm ? handleAdd() : handleSave())}
                 placeholder="Document title..."
+                autoFocus={showForm}
                 className="flex-1 min-w-[120px] bg-transparent text-base font-semibold text-slate-200 placeholder-slate-600 outline-none"
               />
               <input
@@ -171,7 +174,7 @@ export default function DocumentsView({ initialDocuments }: Props) {
               >
                 {showForm ? 'Create' : 'Save'}
               </button>
-              <button onClick={() => { setSelected(null); setShowForm(false) }} className="text-slate-500 hover:text-slate-300">
+              <button onClick={() => { setSelected(null); setShowForm(false) }} aria-label="Close document" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300">
                 <X size={15} />
               </button>
             </div>
@@ -189,8 +192,8 @@ export default function DocumentsView({ initialDocuments }: Props) {
                   <Sparkles size={12} className="text-accent" />
                   <span className="text-xs font-medium text-accent uppercase tracking-widest">Ask AI</span>
                   {editContent && (
-                    <button onClick={handleSummarise} disabled={aiLoading} className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                      Summarise
+                    <button onClick={handleSummarise} disabled={aiAction !== null} className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                      {aiAction === 'summarise' ? 'Summarising…' : 'Summarise'}
                     </button>
                   )}
                 </div>
@@ -205,15 +208,16 @@ export default function DocumentsView({ initialDocuments }: Props) {
                     onChange={e => setAiQuestion(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAsk()}
                     placeholder="Ask a question about this document..."
-                    disabled={aiLoading}
+                    disabled={aiAction !== null}
                     className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-accent transition-colors"
                   />
                   <button
                     onClick={handleAsk}
-                    disabled={aiLoading || !aiQuestion.trim() || !editContent}
+                    disabled={aiAction !== null || !aiQuestion.trim() || !editContent}
+                    aria-label="Ask"
                     className="px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/80 disabled:opacity-40 transition-colors"
                   >
-                    {aiLoading ? <span className="text-xs">...</span> : <Send size={12} />}
+                    {aiAction === 'ask' ? <span className="text-xs">...</span> : <Send size={12} />}
                   </button>
                 </div>
               </div>

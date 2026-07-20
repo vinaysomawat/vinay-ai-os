@@ -6,6 +6,7 @@ import { addTask } from '@/features/planner/actions'
 import { addExpense } from '@/features/finance/actions'
 import { todayIST } from '@/lib/date'
 import { upsertTodayMetric } from '@/features/health/actions'
+import { useEscapeKey } from '@/lib/use-escape-key'
 
 type Mode = null | 'task' | 'expense' | 'metric'
 
@@ -30,6 +31,7 @@ export default function QuickAdd() {
   }, [mode])
 
   const reset = () => { setOpen(false); setMode(null); setDone(false) }
+  useEscapeKey(() => open && reset())
 
   const flash = () => { setDone(true); setTimeout(reset, 800) }
 
@@ -59,22 +61,26 @@ export default function QuickAdd() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button — on mobile this is raised into the BottomNav bar itself (not
+          independently floating over page content) so it can never collide with a card's
+          own right-aligned action button or text at some arbitrary scroll position; desktop
+          keeps the simple bottom-right position since there's no bottom tab bar to anchor to */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 w-12 h-12 bg-accent rounded-full shadow-lg shadow-accent/30 flex items-center justify-center hover:bg-accent/80 transition-colors">
+        aria-label="Quick add"
+        className="fixed bottom-10 left-1/2 -translate-x-1/2 md:bottom-6 md:right-6 md:left-auto md:translate-x-0 z-40 w-12 h-12 bg-accent rounded-full shadow-lg shadow-accent/30 flex items-center justify-center hover:bg-accent/80 transition-colors ring-4 ring-background">
         <Plus size={22} className="text-white" />
       </button>
 
       {/* Modal */}
       {open && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-2xl w-full max-w-sm">
+          <div className="bg-surface-1 border border-surface-3 rounded-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-surface-3">
               <p className="text-sm font-semibold text-slate-200">
                 {mode === 'task' ? 'Add Task' : mode === 'expense' ? 'Add Expense' : mode === 'metric' ? 'Log Metric' : 'Quick Add'}
               </p>
-              <button onClick={reset} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={reset} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
 
             {!mode && (
@@ -101,7 +107,7 @@ export default function QuickAdd() {
                   <option value="high">High priority</option>
                   <option value="low">Low priority</option>
                 </select>
-                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 transition-all">
+                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 active:scale-95 transition-all">
                   {done ? '✓ Added!' : isPending ? 'Adding...' : 'Add Task'}
                 </button>
               </form>
@@ -117,7 +123,7 @@ export default function QuickAdd() {
                 </div>
                 <input name="description" placeholder="Description (optional)" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                 <input name="date" type="date" defaultValue={todayIST()} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-accent transition-colors" />
-                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 transition-all">
+                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 active:scale-95 transition-all">
                   {done ? '✓ Logged!' : isPending ? 'Logging...' : 'Log Expense'}
                 </button>
               </form>
@@ -129,7 +135,7 @@ export default function QuickAdd() {
                   {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <input name="value" type="number" step="any" required placeholder="Value" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
-                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 transition-all">
+                <button type="submit" disabled={isPending || done} className="w-full py-2.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60 active:scale-95 transition-all">
                   {done ? '✓ Logged!' : isPending ? 'Logging...' : 'Log Metric'}
                 </button>
               </form>

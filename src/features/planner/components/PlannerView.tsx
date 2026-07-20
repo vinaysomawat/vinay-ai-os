@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useOptimistic, useTransition } from 'react'
-import { Plus, CheckCircle2, Circle, Trash2, Sparkles, ExternalLink } from 'lucide-react'
+import { Plus, CheckCircle2, Circle, Trash2, Sparkles, ExternalLink, ListTodo } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
+import StatCard from '@/components/StatCard'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addTask, toggleTask, deleteTask } from '../actions'
@@ -25,8 +27,8 @@ function monthKey(dateStr: string) {
 
 function PendingTaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (id: string, done: boolean) => void; onDelete: (id: string) => void }) {
   return (
-    <li className="flex items-center gap-2 py-1 px-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
-      <button onClick={() => onToggle(task.id, task.done)} className="shrink-0">
+    <li className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
+      <button onClick={() => onToggle(task.id, task.done)} aria-label="Mark task complete" className="p-1.5 -m-1.5 shrink-0">
         <Circle size={16} className="text-slate-600 group-hover:text-accent transition-colors" />
       </button>
       <p className="flex-1 min-w-0 text-sm text-slate-200 truncate">{task.text}</p>
@@ -48,7 +50,7 @@ function PendingTaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (i
         </a>
       )}
       <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority]}`} />
-      <button onClick={() => onDelete(task.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+      <button onClick={() => onDelete(task.id)} aria-label="Delete task" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
         <Trash2 size={13} />
       </button>
     </li>
@@ -62,7 +64,7 @@ interface Props {
 export default function PlannerView({ initialTasks }: Props) {
   const [input, setInput] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
-  const [area, setArea] = useState('General')
+  const [area] = useState('General')
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -151,22 +153,10 @@ export default function PlannerView({ initialTasks }: Props) {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-slate-200">{pending.length}</span>
-          <span className="text-xs text-slate-500 mt-0.5">Pending</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-red-400">{highPriorityPending}</span>
-          <span className="text-xs text-slate-500 mt-0.5">High priority</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-amber-400">{overdue}</span>
-          <span className="text-xs text-slate-500 mt-0.5">Overdue</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-green-400">{done.length}</span>
-          <span className="text-xs text-slate-500 mt-0.5">Completed</span>
-        </div>
+        <StatCard value={pending.length} label="Pending" />
+        <StatCard value={highPriorityPending} label="High priority" valueClassName="text-red-400" />
+        <StatCard value={overdue} label="Overdue" valueClassName="text-amber-400" />
+        <StatCard value={done.length} label="Completed" valueClassName="text-green-400" />
       </div>
 
       {/* Tasks left incomplete from a previous month — surfaced separately
@@ -226,7 +216,7 @@ export default function PlannerView({ initialTasks }: Props) {
         </div>
 
         {thisMonthPending.length === 0 && (
-          <p className="text-sm text-slate-600 text-center py-6">No tasks this month — add one above</p>
+          <EmptyState icon={ListTodo} message="No tasks this month — add one above" />
         )}
         <ul className="space-y-1">
           {thisMonthPending.map(task => <PendingTaskRow key={task.id} task={task} onToggle={handleToggle} onDelete={handleDelete} />)}
@@ -239,13 +229,14 @@ export default function PlannerView({ initialTasks }: Props) {
             </summary>
             <ul className="space-y-1 mt-2">
               {done.map(task => (
-                <li key={task.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
-                  <button onClick={() => handleToggle(task.id, task.done)} className="shrink-0">
+                <li key={task.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
+                  <button onClick={() => handleToggle(task.id, task.done)} aria-label="Mark task incomplete" className="p-1.5 -m-1.5 shrink-0">
                     <CheckCircle2 size={16} className="text-green-500" />
                   </button>
                   <p className="flex-1 text-sm text-slate-500 line-through">{task.text}</p>
                   <button
                     onClick={() => handleDelete(task.id)}
+                    aria-label="Delete task"
                     className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"
                   >
                     <Trash2 size={13} />
@@ -259,7 +250,7 @@ export default function PlannerView({ initialTasks }: Props) {
 
       <Card title="By Area" padding="p-3" className="lg:col-span-2">
         {areaEntries.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No pending tasks</p>
+          <EmptyState icon={ListTodo} message="No pending tasks" />
         ) : (
           <ul className="space-y-1.5">
             {areaEntries.map(([area, count]) => (

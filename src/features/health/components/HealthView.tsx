@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useOptimistic, useTransition } from 'react'
-import { Plus, Trash2, Sparkles, Settings2 } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Settings2, Dumbbell } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { upsertTodayMetric, logWorkout, deleteWorkout } from '../actions'
@@ -36,8 +37,8 @@ function getLast7Days() {
   return Array.from({ length: 7 }, (_, i) => daysAgoIST(6 - i))
 }
 
-function MetricCard({ field, label, emoji, unit, decimals = 0, todayValue, weekAvg, onSave, saving, leftText }: {
-  field: MetricField; label: string; emoji: string; unit: string; decimals?: number
+function MetricCard({ label, emoji, unit, decimals = 0, todayValue, weekAvg, onSave, saving, leftText }: {
+  label: string; emoji: string; unit: string; decimals?: number
   todayValue: number | null; weekAvg: number | null; onSave: (v: number) => void; saving: boolean
   leftText?: string | null
 }) {
@@ -257,11 +258,7 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* Today's metrics */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-300">Today&apos;s Metrics</h3>
-          <span className="text-xs text-slate-600">Press Enter to save</span>
-        </div>
+      <Card title="Today's Metrics" padding="p-3.5" action={<span className="text-xs text-slate-500">Press Enter to save</span>}>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2">
           {METRICS.map(m => (
             <MetricCard
@@ -275,7 +272,7 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
             />
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Workouts */}
       <Card title="Workouts" padding="p-3.5" action={<span className="text-xs text-slate-500">{workouts.length} today</span>}>
@@ -305,13 +302,13 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
           </button>
         </div>
         {workouts.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-3">No workouts logged today</p>
+          <EmptyState icon={Dumbbell} message="No workouts logged today" compact />
         ) : (
           <ul className="space-y-1">
             {workouts.map(w => (
               <li key={w.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
                 <span className="flex-1 text-sm text-slate-200">{w.type}{w.duration_minutes ? ` — ${w.duration_minutes} min` : ''}</span>
-                <button onClick={() => handleDeleteWorkout(w.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                <button onClick={() => handleDeleteWorkout(w.id)} aria-label="Delete workout" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                   <Trash2 size={13} />
                 </button>
               </li>

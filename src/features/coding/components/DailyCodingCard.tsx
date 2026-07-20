@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { CheckCircle2, Circle, ExternalLink, Flame, Trophy } from 'lucide-react'
+import { CheckCircle2, Circle, ExternalLink, Flame, Trophy, Moon } from 'lucide-react'
+import EmptyState from '@/components/EmptyState'
 import { markQuestionComplete } from '../daily'
 import type { DailyQuestion, CodingStats } from '../daily-core'
 
@@ -36,12 +37,12 @@ export default function DailyCodingCard({ initialAssignment, stats }: Props) {
       </div>
 
       {assignment.length === 0 ? (
-        <p className="text-sm text-slate-600 text-center py-6">🧘 No new questions today — revision day. Browse your history below.</p>
+        <EmptyState icon={Moon} message="No new questions today — revision day. Browse your history below." />
       ) : (
         <ul className="space-y-2">
           {assignment.map(a => (
             <li key={a.id} className={`flex items-center gap-3 p-3 rounded-lg border ${a.completed ? 'bg-surface-2/50 border-surface-3' : 'bg-surface-2 border-surface-3'}`}>
-              <button onClick={() => !a.completed && handleComplete(a.id)} disabled={a.completed || isPending} className="shrink-0">
+              <button onClick={() => !a.completed && handleComplete(a.id)} disabled={a.completed || isPending} aria-label="Mark question complete" className="p-1.5 -m-1.5 shrink-0">
                 {a.completed ? <CheckCircle2 size={18} className="text-green-500" /> : <Circle size={18} className="text-slate-600 hover:text-accent transition-colors" />}
               </button>
               <div className="flex-1 min-w-0">

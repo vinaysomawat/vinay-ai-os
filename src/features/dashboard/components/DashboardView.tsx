@@ -1,12 +1,15 @@
 import Link from 'next/link'
 import {
   CalendarDays, Briefcase, DollarSign, HeartPulse,
-  BookOpen, Code2, FileText, Circle, Lightbulb, Target,
+  BookOpen, Code2, FileText, Circle, Lightbulb, Target, ListTodo,
 } from 'lucide-react'
 import Card from '@/components/Card'
-import ScoreHero from './ScoreHero'
+import EmptyState from '@/components/EmptyState'
+import MiniRing from './MiniRing'
 import RealtimeRefresh from './RealtimeRefresh'
 import BotActivityCard from './BotActivityCard'
+import ScoreExplainer from '@/features/brain/components/ScoreExplainer'
+import { explainScore } from '@/features/brain/calculations'
 import type { getDashboardData } from '../actions'
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -19,18 +22,6 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>
-
-function MiniRing({ score, color }: { score: number; color: string }) {
-  const r = 16, circ = 2 * Math.PI * r
-  const dash = (score / 100) * circ
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx="20" cy="20" r={r} fill="none" stroke="#26263a" strokeWidth="4" />
-      <circle cx="20" cy="20" r={r} fill="none" stroke={color} strokeWidth="4"
-        strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`} strokeLinecap="round" />
-    </svg>
-  )
-}
 
 function computeInsights(
   stats: DashboardData['stats'],
@@ -71,7 +62,8 @@ function computeInsights(
 }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
-  const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, todayHealth, aiBudget, topActions, todayProgress, todayRecommendations } = data
+  const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, scoreHistory, todayHealth, aiBudget, topActions, todayProgress, todayRecommendations } = data
+  const scoreExplanation = explainScore(scoreHistory, scores, scoreTips)
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -99,12 +91,9 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-4">
       <RealtimeRefresh />
-      {/* Header */}
-      <div className="flex items-baseline justify-between flex-wrap gap-1">
-        <div>
-          <h2 className="text-2xl font-bold text-white">{greeting}, Vinay</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Here&apos;s your Life Intelligence Dashboard</p>
-        </div>
+      {/* Header — the page title itself lives in the shared Header (h1 "Dashboard"); this is just a slim status line, not a second title */}
+      <div className="flex items-center justify-between flex-wrap gap-1">
+        <p className="text-sm font-medium text-slate-300">{greeting}, Vinay</p>
         <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">{today}</p>
       </div>
 
@@ -114,7 +103,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           {/* Circular Score */}
           <div className="shrink-0">
             <p className="text-xs text-slate-500 uppercase tracking-widest text-center mb-1">Life Score</p>
-            <ScoreHero score={scores.life ?? 0} />
+            <ScoreExplainer score={scores.life ?? 0} result={scoreExplanation} />
           </div>
 
           {/* Divider */}
@@ -124,18 +113,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           {/* Module Scores */}
           <div className="flex-1 w-full">
             <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">Module Scores</p>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {moduleScores.map(({ label, score, color, to, tip }) => (
                 <Link key={to} href={to} title={tip}
-                  className="flex flex-col items-center gap-1 p-1.5 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 transition-colors group">
-                  <div className="relative">
-                    <MiniRing score={score} color={color} />
-                    <span
-                      className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums"
-                      style={{ color }}>
-                      {score}
-                    </span>
-                  </div>
+                  className="flex flex-col items-center gap-1 p-1.5 rounded-xl bg-surface-2 border border-surface-3 hover:border-accent/30 hover:-translate-y-0.5 hover:shadow-lg transition-all group">
+                  <MiniRing score={score} color={color} />
                   <p className="text-xs text-slate-500 group-hover:text-slate-400 text-center leading-tight">{label}</p>
                 </Link>
               ))}
@@ -149,14 +131,13 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* Today's Progress — resets to a fresh checklist every midnight, separate from the persistent Life Score above */}
-      <Card title="Today's Progress" padding="p-3" action={<span className="text-xs text-slate-500">{todayProgress.completed}/{todayProgress.total} done</span>}>
+      {/* Daily Mission — resets to a fresh checklist every midnight, separate from the persistent Life Score above.
+          Deterministic, cross-module (Planner/Health/Coding/Learning/Finance) — same primitive the Phase 2 "Brain"
+          PRD calls Daily Mission; not a new feature, just this existing checklist reframed. */}
+      <Card title="Daily Mission" padding="p-3.5" action={<span className="text-xs text-slate-500">{todayProgress.completed}/{todayProgress.total} done</span>}>
         <div className="flex items-center gap-4">
-          <div className="relative shrink-0">
+          <div className="shrink-0">
             <MiniRing score={todayProgress.score} color="#8b5cf6" />
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums" style={{ color: '#8b5cf6' }}>
-              {todayProgress.score}
-            </span>
           </div>
           <div className="flex-1 min-w-0">
             {todayRecommendations.length > 0 ? (
@@ -178,8 +159,8 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </Card>
 
       {/* Today's Focus + Insights side by side — both are short scannable lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Today's Focus" padding="p-3" action={<Target size={13} className="text-accent" />}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <Card title="Today's Focus" padding="p-3.5" action={<Target size={13} className="text-accent" />}>
           {topActions.length > 0 ? (
             <ul className="space-y-0">
               {topActions.map((action, i) => (
@@ -199,7 +180,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           )}
         </Card>
 
-        <Card title="Insights" padding="p-3" action={<Lightbulb size={13} className="text-amber-400" />}>
+        <Card title="Insights" padding="p-3.5" action={<Lightbulb size={13} className="text-amber-400" />}>
           {insights.length > 0 ? (
             <ul className="space-y-0.5">
               {insights.map((insight, i) => (
@@ -223,7 +204,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
           {modules.map(({ label, to, icon: Icon, color, bg, stat }) => (
             <Link key={to} href={to}
-              className="group flex flex-col gap-2 p-3 bg-surface-1 border border-surface-3 rounded-xl hover:border-accent/40 hover:bg-surface-2 transition-all">
+              className="group flex flex-col gap-2 p-3.5 bg-surface-1 border border-surface-3 rounded-xl hover:border-accent/40 hover:bg-surface-2 hover:-translate-y-0.5 hover:shadow-lg transition-all">
               <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}>
                 <Icon size={16} className={color} />
               </div>
@@ -238,15 +219,15 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
       {/* Live data panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <Card title="Pending Tasks" action={
+        <Card title="Pending Tasks" padding="p-3.5" action={
           <Link href="/planner" className="text-xs text-accent hover:underline">View all</Link>
         }>
           {pendingTasks.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-4">No pending tasks</p>
+            <EmptyState icon={ListTodo} message="No pending tasks" compact />
           ) : (
             <ul className="space-y-1">
               {pendingTasks.map(task => (
-                <li key={task.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface-2 transition-colors">
+                <li key={task.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors">
                   <Circle size={14} className="text-slate-600 shrink-0" />
                   <p className="flex-1 text-sm text-slate-300 truncate">{task.text}</p>
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[task.priority]}`} />
@@ -256,15 +237,15 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           )}
         </Card>
 
-        <Card title="Recent Applications" action={
+        <Card title="Recent Applications" padding="p-3.5" action={
           <Link href="/career" className="text-xs text-accent hover:underline">View all</Link>
         }>
           {recentApplications.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-4">No applications yet</p>
+            <EmptyState icon={Briefcase} message="No applications yet" compact />
           ) : (
             <ul className="space-y-1">
               {recentApplications.map(app => (
-                <li key={app.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface-2 transition-colors">
+                <li key={app.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-300 truncate">{app.company} — {app.role}</p>
                     <p className="text-xs text-slate-600 mt-0.5">{app.applied_at}</p>

@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Flame, BookOpen, RotateCcw, Lightbulb } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Flame, BookOpen, RotateCcw, Lightbulb, Inbox } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
+import StatCard from '@/components/StatCard'
+import FilterPill from '@/components/FilterPill'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addResource, updateResource, deleteResource, logStudySession } from '../actions'
@@ -10,6 +13,9 @@ import { getDailyStudyPlan, generateResourceQuiz } from '@/features/ai/study-pla
 import { getResourcesNeedingRevision, getStudyStreak } from '../calculations'
 import { SUGGESTED_RESOURCES } from '../suggested-resources'
 import { todayIST, daysAgoIST } from '@/lib/date'
+import { useEscapeKey } from '@/lib/use-escape-key'
+import { useFormValidation } from '@/lib/use-form-validation'
+import FieldError from '@/components/FieldError'
 import type { Resource, ResourceStatus, ResourceType, StudyLog } from '../types'
 
 const TYPE_ICON: Record<ResourceType, string> = {
@@ -90,6 +96,14 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [addedSuggestionUrls, setAddedSuggestionUrls] = useState<Set<string>>(new Set())
 
+  useEscapeKey(() => {
+    if (showForm) setShowForm(false)
+    if (showLog) setShowLog(null)
+    if (quizResource) setQuizResource(null)
+  })
+  const { invalidFields, validate, clear, onFieldInput } = useFormValidation()
+  useEffect(() => clear(), [showForm, clear])
+
   const today = todayIST()
   const streak = getStudyStreak(studyLogs)
   const weekMinutes = totalMinutesThisWeek(studyLogs)
@@ -168,25 +182,10 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
       {advisorPortal}
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-slate-200">{resources.length}</span>
-          <span className="text-xs text-slate-500 mt-0.5">Total</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-amber-400">{counts['in-progress']}</span>
-          <span className="text-xs text-slate-500 mt-0.5">In progress</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <span className="text-2xl font-bold text-green-400">{counts['completed']}</span>
-          <span className="text-xs text-slate-500 mt-0.5">Completed</span>
-        </div>
-        <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex flex-col items-center">
-          <div className="flex items-center gap-1">
-            <Flame size={16} className="text-amber-400" />
-            <span className="text-2xl font-bold text-amber-400">{streak}</span>
-          </div>
-          <span className="text-xs text-slate-500 mt-0.5">{weekMinutes}m this week</span>
-        </div>
+        <StatCard value={resources.length} label="Total" />
+        <StatCard value={counts['in-progress']} label="In progress" valueClassName="text-amber-400" />
+        <StatCard value={counts['completed']} label="Completed" valueClassName="text-green-400" />
+        <StatCard value={streak} label={`${weekMinutes}m this week`} valueClassName="text-amber-400" icon={<Flame size={16} className="text-amber-400" />} />
       </div>
 
       {/* Revision nudge — rule-based, not AI: completed resources with no study activity in 14+ days */}
@@ -257,20 +256,14 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
           bucket (still distinguishable per-row via each resource's own status
           dropdown below), defaulting to that view instead of All */}
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === 'all' ? 'bg-accent text-white' : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
-          All ({resources.length})
-        </button>
+        <FilterPill label={`All (${resources.length})`} active={filter === 'all'} onClick={() => setFilter('all')} />
         {([
           { key: 'active' as const, ...STATUS_CONFIG['not-started'], count: counts['not-started'] + counts['in-progress'] },
           { key: 'completed' as const, ...STATUS_CONFIG['completed'], count: counts['completed'] },
-        ]).map(cfg => {
-          return (
-            <button key={cfg.key} onClick={() => setFilter(filter === cfg.key ? 'all' : cfg.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === cfg.key ? `${cfg.bg} ${cfg.color}` : 'bg-surface-1 border border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
-              {cfg.label} ({cfg.count})
-            </button>
-          )
-        })}
+        ]).map(cfg => (
+          <FilterPill key={cfg.key} label={`${cfg.label} (${cfg.count})`} active={filter === cfg.key}
+            onClick={() => setFilter(filter === cfg.key ? 'all' : cfg.key)} activeClassName={`${cfg.bg} ${cfg.color}`} />
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
@@ -279,7 +272,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
           <Plus size={12} /> Add
         </button>
       }>
-        {filtered.length === 0 && <p className="text-sm text-slate-600 text-center py-8">Nothing here yet</p>}
+        {filtered.length === 0 && <EmptyState icon={Inbox} message="Nothing here yet" cta={{ label: 'Add', onClick: () => setShowForm(true) }} />}
         <ul className="space-y-1">
           {filtered.map(r => {
             const cfg = STATUS_CONFIG[r.status]
@@ -311,7 +304,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
                         <button onClick={() => handleQuiz(r)} className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
                           Quiz me
                         </button>
-                        <button onClick={() => handleDelete(r.id)} className="text-slate-600 hover:text-red-400 transition-all">
+                        <button onClick={() => handleDelete(r.id)} aria-label="Delete resource" className="p-1.5 -m-1.5 text-slate-600 hover:text-red-400 transition-all">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -331,7 +324,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
 
       <Card title="By Category" padding="p-3" className="lg:col-span-2">
         {categoryEntries.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No resources yet</p>
+          <EmptyState icon={BookOpen} message="No resources yet" />
         ) : (
           <ul className="space-y-1.5">
             {categoryEntries.map(([category, count]) => (
@@ -353,13 +346,14 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
       {/* Add resource modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">Add Resource</h2>
-              <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => setShowForm(false)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
-            <form onSubmit={async e => {
+            <form noValidate onInput={onFieldInput} onSubmit={async e => {
               e.preventDefault()
+              if (!validate(e.currentTarget)) return
               const fd = new FormData(e.currentTarget)
               const newR: Resource = {
                 id: `temp-${Date.now()}`, user_id: '',
@@ -374,7 +368,8 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
             }} className="space-y-3">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Title *</label>
-                <input name="title" required autoFocus placeholder="The Pragmatic Programmer" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                <input name="title" required autoFocus placeholder="The Pragmatic Programmer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('title') ? 'border-red-500' : 'border-surface-3'}`} />
+                <FieldError show={invalidFields.has('title')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -398,7 +393,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
               </div>
             </form>
           </div>
@@ -408,10 +403,10 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
       {/* Log session modal */}
       {showLog !== undefined && showLog !== null && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-slate-200">Log Study Session</h2>
-              <button onClick={() => setShowLog(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => setShowLog(null)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
             <p className="text-sm text-slate-400 mb-4">{showLog.title}</p>
             <div className="space-y-3">
@@ -428,7 +423,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowLog(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                <button onClick={() => handleLogSession(showLog)} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors flex items-center justify-center gap-1.5">
+                <button onClick={() => handleLogSession(showLog)} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition flex items-center justify-center gap-1.5">
                   <Flame size={13} /> Log {logDuration}m
                 </button>
               </div>
@@ -440,13 +435,13 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
       {/* Quiz modal */}
       {quizResource && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-200">Quiz: {quizResource.title}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Click an answer to reveal it</p>
               </div>
-              <button onClick={() => { setQuizResource(null); setQuizItems([]) }} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => { setQuizResource(null); setQuizItems([]) }} aria-label="Close quiz" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
 
             {quizLoading ? (
@@ -472,7 +467,7 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
                       <div className="p-3">
                         <p className="text-sm text-slate-300 font-medium">{i + 1}. {item.question}</p>
                       </div>
-                      <button onClick={() => setRevealed(prev => { const n = new Set(prev); isRevealed ? n.delete(i) : n.add(i); return n })}
+                      <button onClick={() => setRevealed(prev => { const n = new Set(prev); if (isRevealed) n.delete(i); else n.add(i); return n })}
                         className="w-full flex items-center gap-2 px-3 py-2 bg-surface-2 border-t border-surface-3 hover:bg-surface-3 transition-colors text-left">
                         <ChevronRight size={12} className={`text-accent shrink-0 transition-transform ${isRevealed ? 'rotate-90' : ''}`} />
                         <span className="text-xs text-slate-500">{isRevealed ? 'Hide answer' : 'Show answer'}</span>

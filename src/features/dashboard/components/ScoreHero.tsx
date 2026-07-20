@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { todayIST } from '@/lib/date'
+import { useCountUp } from '@/lib/use-count-up'
 
 const SCORE_KEY = 'vos_life_score'
 const DATE_KEY  = 'vos_life_score_date'
 
 export default function ScoreHero({ score }: { score: number }) {
   const [delta, setDelta] = useState<number | null>(null)
+  const animated = useCountUp(score)
 
   useEffect(() => {
     const today       = todayIST()
@@ -26,7 +28,7 @@ export default function ScoreHero({ score }: { score: number }) {
 
   const r    = 56
   const circ = 2 * Math.PI * r
-  const dash = (score / 100) * circ
+  const dash = (animated / 100) * circ
 
   const level =
     score >= 90 ? 'Outstanding'     :
@@ -58,7 +60,7 @@ export default function ScoreHero({ score }: { score: number }) {
           </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-          <span className="text-2xl font-bold text-white tabular-nums leading-none">{score}</span>
+          <span className="text-2xl font-bold text-white tabular-nums leading-none">{animated}</span>
           <span className="text-[10px] text-slate-500 mt-0.5 font-medium">/100</span>
         </div>
       </div>

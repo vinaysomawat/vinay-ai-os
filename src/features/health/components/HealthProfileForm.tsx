@@ -5,6 +5,9 @@ import { X } from 'lucide-react'
 import { upsertHealthProfile } from '../actions'
 import { ACTIVITY_LEVELS } from '../types'
 import type { HealthProfile, ActivityLevel, Gender } from '../types'
+import { useEscapeKey } from '@/lib/use-escape-key'
+import { useFormValidation } from '@/lib/use-form-validation'
+import FieldError from '@/components/FieldError'
 
 interface Props {
   profile: HealthProfile | null
@@ -14,9 +17,12 @@ interface Props {
 
 export default function HealthProfileForm({ profile, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false)
+  useEscapeKey(onClose)
+  const { invalidFields, validate, onFieldInput } = useFormValidation()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!validate(e.currentTarget)) return
     setSaving(true)
     const fd = new FormData(e.currentTarget)
     const payload = {
@@ -41,35 +47,39 @@ export default function HealthProfileForm({ profile, onClose, onSaved }: Props) 
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-slate-200">Health Profile</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
         </div>
         <p className="text-xs text-slate-500 mb-4">One-time setup — used to calculate your daily calorie/macro targets and health score. If your BMI is above normal, targets carry a gradual deficit toward a normal BMI (auto-computed from height, no target weight needed); otherwise they&apos;re maintenance. Your current weight comes from today&apos;s metric log.</p>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} noValidate onInput={onFieldInput} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs text-slate-500 uppercase tracking-wider">Age</label>
-              <input name="age" type="number" required defaultValue={profile?.age ?? ''} placeholder="29" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+              <input name="age" type="number" required defaultValue={profile?.age ?? ''} placeholder="29" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('age') ? 'border-red-500' : 'border-surface-3'}`} />
+              <FieldError show={invalidFields.has('age')} />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-slate-500 uppercase tracking-wider">Gender</label>
-              <select name="gender" required defaultValue={profile?.gender ?? 'male'} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+              <select name="gender" required defaultValue={profile?.gender ?? 'male'} className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors ${invalidFields.has('gender') ? 'border-red-500' : 'border-surface-3'}`}>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
+              <FieldError show={invalidFields.has('gender')} />
             </div>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500 uppercase tracking-wider">Height (cm)</label>
-            <input name="height_cm" type="number" required defaultValue={profile?.height_cm ?? ''} placeholder="183" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+            <input name="height_cm" type="number" required defaultValue={profile?.height_cm ?? ''} placeholder="183" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('height_cm') ? 'border-red-500' : 'border-surface-3'}`} />
+            <FieldError show={invalidFields.has('height_cm')} />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500 uppercase tracking-wider">Activity level</label>
-            <select name="activity_level" required defaultValue={profile?.activity_level ?? 'moderate'} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+            <select name="activity_level" required defaultValue={profile?.activity_level ?? 'moderate'} className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors ${invalidFields.has('activity_level') ? 'border-red-500' : 'border-surface-3'}`}>
               {ACTIVITY_LEVELS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
+            <FieldError show={invalidFields.has('activity_level')} />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500 uppercase tracking-wider">Workout days/week</label>
@@ -81,7 +91,7 @@ export default function HealthProfileForm({ profile, onClose, onSaved }: Props) 
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-60 transition-colors">
+            <button type="submit" disabled={saving} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-60 active:scale-95 transition">
               {saving ? 'Saving...' : 'Save Profile'}
             </button>
           </div>

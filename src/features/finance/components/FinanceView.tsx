@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Plus, Trash2, X, Sparkles, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff, Repeat } from 'lucide-react'
+import { useState, useEffect, useTransition } from 'react'
+import { Plus, Trash2, X, Sparkles, Pencil, Check, TrendingUp, TrendingDown, Eye, EyeOff, Repeat, Landmark, Target, Receipt } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
 import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import { todayIST } from '@/lib/date'
 import {
@@ -15,6 +16,9 @@ import {
 import { askFinanceAdvisor } from '@/features/ai/finance-advisor'
 import { CATEGORIES, INVESTMENT_TYPES, INVESTMENT_COLOR } from '../types'
 import type { Expense, Budget, FinanceProfile, Loan, Investment, FinancialGoal, RecurringExpense, InvestmentType, GoalPriority } from '../types'
+import { useEscapeKey } from '@/lib/use-escape-key'
+import { useFormValidation } from '@/lib/use-form-validation'
+import FieldError from '@/components/FieldError'
 
 const CATEGORY_COLOR: Record<string, string> = {
   Food: 'bg-orange-500/15 text-orange-400', Transport: 'bg-blue-500/15 text-blue-400',
@@ -48,7 +52,7 @@ function InlineEdit({ value, onSave, prefix = '₹', suffix = '', placeholder = 
   return (
     <div className="flex items-center gap-1">
       <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { onSave(input); setEditing(false) } if (e.key === 'Escape') setEditing(false) }} autoFocus className={`${inputWidth} bg-surface-2 border border-accent rounded px-2 py-0.5 ${textSize} outline-none`} />
-      <button onClick={() => { onSave(input); setEditing(false) }} className="text-green-400"><Check size={12} /></button>
+      <button onClick={() => { onSave(input); setEditing(false) }} aria-label="Save" className="p-1.5 -m-1.5 text-green-400"><Check size={12} /></button>
     </div>
   )
 }
@@ -80,6 +84,9 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
 
   // Modal state
   const [modal, setModal] = useState<'loan' | 'investment' | 'goal' | 'expense' | 'recurring' | null>(null)
+  useEscapeKey(() => setModal(null))
+  const { invalidFields, validate, clear, onFieldInput } = useFormValidation()
+  useEffect(() => clear(), [modal, clear])
   const [editingBudget, setEditingBudget] = useState<string | null>(null)
   const [budgetInput, setBudgetInput] = useState('')
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
@@ -163,7 +170,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
             <span className={`text-xs font-medium ${pl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {pl >= 0 ? '+' : ''}{plPct.toFixed(1)}%
             </span>
-            <button onClick={() => handleDeleteInvestment(inv.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+            <button onClick={() => handleDeleteInvestment(inv.id)} aria-label="Delete investment" className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
               <Trash2 size={12} />
             </button>
           </div>
@@ -300,6 +307,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           onChange={e => setAiQuestion(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAsk()}
           placeholder="Ask about your finances..."
+          disabled={aiLoading}
           className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
         />
         <button onClick={handleAsk} disabled={aiLoading || !aiQuestion.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
@@ -323,7 +331,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
         <div className="bg-surface-1 border border-surface-3 rounded-xl p-4">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-slate-500 uppercase tracking-wider">Monthly Salary</p>
-            <button onClick={() => setSalaryVisible(v => !v)} className="text-slate-600 hover:text-slate-400 transition-colors">
+            <button onClick={() => setSalaryVisible(v => !v)} aria-label={salaryVisible ? 'Hide salary' : 'Show salary'} className="p-1.5 -m-1.5 text-slate-600 hover:text-slate-400 transition-colors">
               {salaryVisible ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
           </div>
@@ -366,7 +374,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           </button>
         }>
           {localLoans.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-6">No loans added</p>
+            <EmptyState icon={Landmark} message="No loans added" cta={{ label: 'Add loan', onClick: () => setModal('loan') }} />
           ) : (
             <ul className="space-y-3">
               {localLoans.map(loan => {
@@ -396,7 +404,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-red-400">{fmt(remaining)}</span>
-                        <button onClick={() => handleDeleteLoan(loan.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                        <button onClick={() => handleDeleteLoan(loan.id)} aria-label="Delete loan" className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -419,7 +427,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           </button>
         }>
           {localInvestments.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-6">No investments added</p>
+            <EmptyState icon={TrendingUp} message="No investments added" cta={{ label: 'Add', onClick: () => setModal('investment') }} />
           ) : (
             <div className="space-y-4">
               {sips.length > 0 && (
@@ -446,7 +454,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
         </button>
       }>
         {localGoals.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No goals set — add one to track your savings</p>
+          <EmptyState icon={Target} message="No goals set — add one to track your savings" cta={{ label: 'Add goal', onClick: () => setModal('goal') }} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {localGoals.map(goal => {
@@ -465,7 +473,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                       {editingGoalId === goal.id ? (
                         <div className="flex items-center gap-1">
                           <input value={editInput} onChange={e => setEditInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleGoalProgressSave(goal.id); if (e.key === 'Escape') setEditingGoalId(null) }} autoFocus className="w-24 bg-surface-2 border border-accent rounded px-2 py-0.5 text-xs outline-none" />
-                          <button onClick={() => handleGoalProgressSave(goal.id)} className="text-green-400"><Check size={10} /></button>
+                          <button onClick={() => handleGoalProgressSave(goal.id)} aria-label="Save goal progress" className="p-1.5 -m-1.5 text-green-400"><Check size={10} /></button>
                         </div>
                       ) : (
                         <button onClick={() => { setEditingGoalId(goal.id); setEditInput(String(goal.current_amount)) }} className="text-xs text-slate-400 hover:text-white flex items-center gap-1 group/g">
@@ -473,7 +481,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                           <Pencil size={8} className="opacity-0 group-hover/g:opacity-50 transition-opacity" />
                         </button>
                       )}
-                      <button onClick={() => handleDeleteGoal(goal.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
+                      <button onClick={() => handleDeleteGoal(goal.id)} aria-label="Delete goal" className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -508,7 +516,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
             </div>
           </div>
           {byCategory.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-4">No expenses this month</p>
+            <EmptyState icon={Receipt} message="No expenses this month" compact />
           ) : (
             <ul className="space-y-2">
               {byCategory.map(({ cat, spent, budget }) => {
@@ -549,7 +557,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                             <span className="text-xs text-slate-600 shrink-0">{exp.date}</span>
                             {exp.description && <span className="text-xs text-slate-500 truncate flex-1">{exp.description}</span>}
                             <span className="text-xs text-slate-300 font-medium shrink-0 ml-auto">{fmt(Number(exp.amount))}</span>
-                            <button onClick={() => handleDeleteExpense(exp.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={11} /></button>
+                            <button onClick={() => handleDeleteExpense(exp.id)} aria-label="Delete expense" className="p-1 -m-1 shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={11} /></button>
                           </li>
                         ))}
                       </ul>
@@ -568,16 +576,16 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
           </button>
         }>
           {localExpenses.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-4">No expenses this month</p>
+            <EmptyState icon={Receipt} message="No expenses this month" compact cta={{ label: 'Add', onClick: () => setModal('expense') }} />
           ) : (
             <ul className="space-y-0.5 max-h-80 overflow-y-auto">
               {localExpenses.map(exp => (
-                <li key={exp.id} className="flex items-center gap-2 py-1 px-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                <li key={exp.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${CATEGORY_COLOR[exp.category]}`}>{exp.category}</span>
                   <span className="text-xs text-slate-600 shrink-0">{exp.date}</span>
                   {exp.description && <span className="text-xs text-slate-400 truncate flex-1">{exp.description}</span>}
                   <span className="text-xs text-slate-300 font-medium shrink-0 ml-auto">{fmt(Number(exp.amount))}</span>
-                  <button onClick={() => handleDeleteExpense(exp.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={11} /></button>
+                  <button onClick={() => handleDeleteExpense(exp.id)} aria-label="Delete expense" className="p-1 -m-1 shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={11} /></button>
                 </li>
               ))}
             </ul>
@@ -597,11 +605,11 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       }>
         <p className="text-xs text-slate-600 mb-3">Auto-logged into Expenses each month on its scheduled day — rent, subscriptions, and other fixed monthly costs you&apos;d otherwise have to re-enter by hand.</p>
         {localRecurring.length === 0 ? (
-          <p className="text-sm text-slate-600 text-center py-6">No recurring expenses set up</p>
+          <EmptyState icon={Repeat} message="No recurring expenses set up" cta={{ label: 'Add', onClick: () => setModal('recurring') }} />
         ) : (
           <ul className="space-y-1.5">
             {localRecurring.map(r => (
-              <li key={r.id} className={`flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group ${!r.active ? 'opacity-50' : ''}`}>
+              <li key={r.id} className={`flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group ${!r.active ? 'opacity-50' : ''}`}>
                 <Repeat size={14} className="text-accent shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -614,7 +622,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 <button onClick={() => handleToggleRecurring(r.id, !r.active)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300 transition-colors">
                   {r.active ? 'Pause' : 'Resume'}
                 </button>
-                <button onClick={() => handleDeleteRecurring(r.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={13} /></button>
+                <button onClick={() => handleDeleteRecurring(r.id)} aria-label="Delete recurring expense" className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 size={13} /></button>
               </li>
             ))}
           </ul>
@@ -624,17 +632,18 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
       {/* Modals */}
       {modal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-slate-200">
                 {modal === 'loan' ? 'Add Loan' : modal === 'investment' ? 'Add Investment' : modal === 'goal' ? 'Add Goal' : modal === 'recurring' ? 'Add Recurring Expense' : 'Add Expense'}
               </h2>
-              <button onClick={() => setModal(null)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
 
             {modal === 'loan' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const principal = parseFloat(fd.get('principal') as string)
@@ -647,22 +656,24 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 setModal(null)
                 await addLoan(name, principal, emi, rate, months)
               }}>
-                {[['name', 'Loan name', 'text', 'Home Loan', true], ['principal', 'Principal amount (₹)', 'number', '2000000', true], ['emi', 'Monthly EMI (₹)', 'number', '15000', true], ['rate', 'Interest rate (% p.a.)', 'number', '8.5', false], ['months', 'Remaining months', 'number', '180', false]].map(([name, label, type, placeholder, required]) => (
+                {[['name', 'Loan name', 'text', 'Home Loan', true], ['principal', 'Principal amount (₹)', 'number', '2000000', true], ['emi', 'Monthly EMI (₹)', 'number', '15000', true], ['rate', 'Interest rate (% p.a.)', 'number', '8.5', false], ['months', 'Remaining months', 'number', '180', false]].map(([name, label, type, placeholder, required], i) => (
                   <div key={name as string} className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">{label as string}{!required && ' (optional)'}</label>
-                    <input name={name as string} type={type as string} placeholder={placeholder as string} required={required as boolean} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name={name as string} type={type as string} placeholder={placeholder as string} required={required as boolean} autoFocus={i === 0} className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has(name as string) ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has(name as string)} />
                   </div>
                 ))}
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Loan</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Loan</button>
                 </div>
               </form>
             )}
 
             {modal === 'investment' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const type = fd.get('type') as InvestmentType
@@ -686,7 +697,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
-                  <input name="name" placeholder="Axis Bluechip Fund" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="name" placeholder="Axis Bluechip Fund" required autoFocus className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('name') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('name')} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Type</label>
@@ -697,7 +709,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Invested (₹)</label>
-                    <input name="invested" type="number" placeholder="100000" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="invested" type="number" placeholder="100000" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('invested') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('invested')} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Current value (₹)</label>
@@ -712,24 +725,27 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-xs text-slate-500 uppercase tracking-wider">Monthly SIP (₹)</label>
-                      <input name="sipAmount" type="number" placeholder="5000" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                      <input name="sipAmount" type="number" placeholder="5000" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('sipAmount') ? 'border-red-500' : 'border-surface-3'}`} />
+                      <FieldError show={invalidFields.has('sipAmount')} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs text-slate-500 uppercase tracking-wider">Contribution day</label>
-                      <input name="sipDay" type="number" min={1} max={28} placeholder="5" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                      <input name="sipDay" type="number" min={1} max={28} placeholder="5" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('sipDay') ? 'border-red-500' : 'border-surface-3'}`} />
+                      <FieldError show={invalidFields.has('sipDay')} />
                     </div>
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => { setModal(null); setAddingSip(false) }} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
                 </div>
               </form>
             )}
 
             {modal === 'goal' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const target = parseFloat(fd.get('target') as string)
@@ -744,12 +760,14 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Goal name</label>
-                  <input name="name" placeholder="Emergency Fund" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="name" placeholder="Emergency Fund" required autoFocus className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('name') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('name')} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Target (₹)</label>
-                    <input name="target" type="number" placeholder="300000" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="target" type="number" placeholder="300000" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('target') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('target')} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Saved so far (₹)</label>
@@ -772,14 +790,15 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add Goal</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Goal</button>
                 </div>
               </form>
             )}
 
             {modal === 'expense' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const newExp: Expense = {
                   id: `temp-${Date.now()}`, user_id: '',
@@ -796,7 +815,8 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Amount *</label>
-                    <input name="amount" type="number" required min="0" step="0.01" placeholder="500" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="amount" type="number" required min="0" step="0.01" placeholder="500" autoFocus className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('amount') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('amount')} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Date</label>
@@ -805,9 +825,10 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Category *</label>
-                  <select name="category" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                  <select name="category" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors ${invalidFields.has('category') ? 'border-red-500' : 'border-surface-3'}`}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  <FieldError show={invalidFields.has('category')} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Description</label>
@@ -815,14 +836,15 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
                 </div>
               </form>
             )}
 
             {modal === 'recurring' && (
-              <form className="space-y-3" onSubmit={async e => {
+              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
                 e.preventDefault()
+                if (!validate(e.currentTarget)) return
                 const fd = new FormData(e.currentTarget)
                 const name = fd.get('name') as string
                 const amount = parseFloat(fd.get('amount') as string)
@@ -838,27 +860,31 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
               }}>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Name *</label>
-                  <input name="name" required autoFocus placeholder="Rent" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="name" required autoFocus placeholder="Rent" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('name') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('name')} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Amount *</label>
-                    <input name="amount" type="number" required min="0" step="0.01" placeholder="15000" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="amount" type="number" required min="0" step="0.01" placeholder="15000" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('amount') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('amount')} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500 uppercase tracking-wider">Day of month *</label>
-                    <input name="day" type="number" required min="1" max="28" placeholder="1" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                    <input name="day" type="number" required min="1" max="28" placeholder="1" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('day') ? 'border-red-500' : 'border-surface-3'}`} />
+                    <FieldError show={invalidFields.has('day')} />
                   </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Category *</label>
-                  <select name="category" required className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                  <select name="category" required className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors ${invalidFields.has('category') ? 'border-red-500' : 'border-surface-3'}`}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  <FieldError show={invalidFields.has('category')} />
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-colors">Add</button>
+                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
                 </div>
               </form>
             )}

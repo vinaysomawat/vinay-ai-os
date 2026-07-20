@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Star, RotateCcw, ExternalLink, CheckCircle2, Circle, Newspaper } from 'lucide-react'
+import { Star, RotateCcw, ExternalLink, CheckCircle2, Circle, Newspaper, SearchX } from 'lucide-react'
 import Card from '@/components/Card'
+import EmptyState from '@/components/EmptyState'
+import FilterPill from '@/components/FilterPill'
 import { toggleFavorite, toggleRevisionFlag, markQuestionComplete } from '../daily'
 import { completeReading } from '@/features/trending/actions'
 import type { DailyQuestion } from '../daily-core'
@@ -78,25 +80,22 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
     <Card title="Practice Log">
       <div className="flex gap-1.5 flex-wrap mb-4">
         {filters.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`text-xs px-2.5 py-1 rounded-lg transition-colors ${filter === f.key ? 'bg-accent text-white' : 'bg-surface-2 text-slate-500 hover:text-slate-300'}`}>
-            {f.label}
-          </button>
+          <FilterPill key={f.key} label={f.label} active={filter === f.key} onClick={() => setFilter(f.key)} />
         ))}
       </div>
       {filtered.length === 0 && filteredReadings.length === 0 ? (
-        <p className="text-sm text-slate-600 text-center py-6">No questions match this filter.</p>
+        <EmptyState icon={SearchX} message="No questions match this filter." />
       ) : (
         <ul className="space-y-1.5 max-h-96 overflow-y-auto">
           {filteredReadings.map(reading => (
-            <li key={reading.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+            <li key={reading.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
               <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0 text-accent bg-accent/15 flex items-center gap-1">
                 <Newspaper size={10} /> Read
               </span>
               <span className={`flex-1 min-w-0 text-sm truncate ${reading.completed ? 'text-slate-400' : 'text-slate-300'}`}>{reading.title}</span>
               <span className="text-xs text-slate-600 shrink-0">{reading.assigned_date}</span>
-              <button onClick={() => handleReadingComplete(reading.id)} disabled={reading.completed}
-                className={`shrink-0 transition-colors ${reading.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
+              <button onClick={() => handleReadingComplete(reading.id)} disabled={reading.completed} aria-label="Mark reading complete"
+                className={`p-1.5 -m-1.5 shrink-0 transition-colors ${reading.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
                 {reading.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
               </button>
               <a href={reading.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-600 hover:text-accent transition-colors">
@@ -105,18 +104,18 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
             </li>
           ))}
           {filtered.map(h => (
-            <li key={h.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-2 transition-colors group">
+            <li key={h.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_COLOR[h.question.difficulty]}`}>{h.question.difficulty}</span>
               <span className={`flex-1 min-w-0 text-sm truncate ${h.completed ? 'text-slate-400' : 'text-slate-300'}`}>{h.question.title}</span>
               <span className="text-xs text-slate-600 shrink-0">{h.assigned_date}</span>
-              <button onClick={() => !h.completed && handleComplete(h.id)} disabled={h.completed}
-                className={`shrink-0 transition-colors ${h.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
+              <button onClick={() => !h.completed && handleComplete(h.id)} disabled={h.completed} aria-label="Mark question complete"
+                className={`p-1.5 -m-1.5 shrink-0 transition-colors ${h.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
                 {h.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
               </button>
-              <button onClick={() => handleFavorite(h.id)} className={`shrink-0 transition-colors ${h.favorite ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}`}>
+              <button onClick={() => handleFavorite(h.id)} aria-label={h.favorite ? 'Unfavorite question' : 'Favorite question'} className={`p-1.5 -m-1.5 shrink-0 transition-colors ${h.favorite ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}`}>
                 <Star size={13} fill={h.favorite ? 'currentColor' : 'none'} />
               </button>
-              <button onClick={() => handleRevision(h.id)} className={`shrink-0 transition-colors ${h.needs_revision ? 'text-accent' : 'text-slate-600 hover:text-accent'}`}>
+              <button onClick={() => handleRevision(h.id)} aria-label={h.needs_revision ? 'Unflag for revision' : 'Flag for revision'} className={`p-1.5 -m-1.5 shrink-0 transition-colors ${h.needs_revision ? 'text-accent' : 'text-slate-600 hover:text-accent'}`}>
                 <RotateCcw size={13} />
               </button>
               <a href={h.question.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-600 hover:text-accent transition-colors">

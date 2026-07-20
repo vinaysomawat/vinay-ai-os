@@ -64,7 +64,7 @@ export default function BotActivityCard({ botActivity, aiBudget }: {
               const firstLine = entry.response?.split('\n')[0]?.replace(/\*/g, '') ?? ''
               const timeAgo = formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })
               return (
-                <li key={i} className="flex items-center gap-2.5 py-1.5 border-b border-surface-3 last:border-0 text-xs hover:bg-surface-2/50 transition-colors">
+                <li key={i} className="flex items-center gap-2.5 py-1.5 border-b border-surface-3 last:border-0 text-xs hover:bg-surface-2 transition-colors">
                   <span className="shrink-0">{meta.emoji}</span>
                   <span className={`shrink-0 w-16 truncate font-medium ${meta.color}`}>{meta.label}</span>
                   <span className="flex-1 min-w-0 truncate text-slate-300">{entry.message}</span>

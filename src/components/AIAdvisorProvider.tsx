@@ -55,7 +55,7 @@ export function AIAdvisorProvider({ children }: { children: ReactNode }) {
             {Icon && <Icon size={15} className="text-accent" />}
             <span className="text-sm font-semibold text-slate-200">{label}</span>
           </div>
-          <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={() => setIsOpen(false)} aria-label="Close AI advisor panel" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300 transition-colors">
             <X size={16} />
           </button>
         </div>
