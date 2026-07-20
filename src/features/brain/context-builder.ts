@@ -16,14 +16,20 @@ export function buildBrainContext(data: DashboardData): BrainContext {
     today: todayIST(),
     lifeScore: data.scores.life,
     planner: { pendingTaskCount: data.stats.pendingTaskCount },
-    career: { activeApplications: data.stats.activeApplications },
+    career: {
+      activeApplications: data.stats.activeApplications,
+      currentRole: data.careerMemory.currentRole,
+      currentCompany: data.careerMemory.currentCompany,
+      targetRole: data.careerMemory.targetRole,
+      currentSalary: data.careerMemory.currentSalary,
+    },
     finance: { monthSpend: data.stats.monthSpend, monthBudget: data.stats.monthBudget },
     health: { workoutsToday: data.stats.workoutsToday, todayMetric: data.todayHealth },
     learning: { inProgress: data.stats.learningInProgress },
     coding: { solved30d: data.stats.codingSolved30d },
     documents: { count: data.stats.documentCount },
     signals: data.topActions,
-    weeklyPatterns: [],
+    weeklyPatterns: data.recentPatterns,
     monthlyPatterns: [],
   }
 }

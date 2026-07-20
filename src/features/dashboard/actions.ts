@@ -16,6 +16,7 @@ import { checkWorkoutPending, checkNoMetricsToday } from '@/features/health/sign
 import { checkRevisionNeeded } from '@/features/learning/signals'
 import { getTodayTrendingReading } from '@/features/trending/core'
 import { computeTodayProgress, getTodayRecommendations } from './daily-progress'
+import { getRecentPatterns } from '@/features/brain/signals'
 
 export interface TopAction {
   emoji: string
@@ -81,6 +82,8 @@ export async function getDashboardData() {
     topActions: [] as TopAction[],
     todayProgress: { items: [], completed: 0, total: 0, score: 100 } as ReturnType<typeof computeTodayProgress>,
     todayRecommendations: [] as ReturnType<typeof getTodayRecommendations>,
+    careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null } as { currentRole: string | null; currentCompany: string | null; targetRole: string | null; currentSalary: number | null },
+    recentPatterns: [] as string[],
   }
 
   const studyLogsSince = daysAgoIST(14)
@@ -91,6 +94,7 @@ export async function getDashboardData() {
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
     codingCompletionsRes, qaRevisionRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
+    recentPatterns,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
@@ -101,7 +105,7 @@ export async function getDashboardData() {
     supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('telegram_logs').select('module, message, response, created_at').order('created_at', { ascending: false }).limit(50),
     supabase.from('health_metrics').select('*').eq('user_id', user.id).eq('date', today).single(),
-    supabase.from('career_profile').select('current_role, target_role').eq('user_id', user.id).single(),
+    supabase.from('career_profile').select('current_role, target_role, current_company, current_salary').eq('user_id', user.id).single(),
     supabase.from('skills').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('interview_qa').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('ai_usage_logs').select('estimated_cost_usd, cache_hit, created_at').eq('user_id', user.id).gte('created_at', istDateStrToUtcMidnight(monthStart)),
@@ -114,6 +118,7 @@ export async function getDashboardData() {
     supabase.from('tasks').select('id, text, done').eq('user_id', user.id).eq('due_date', today),
     getTodayTrendingReading(supabase, user.id),
     supabase.from('daily_workouts').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', istMidnightUtc()).limit(1),
+    getRecentPatterns(supabase, user.id),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -350,5 +355,12 @@ export async function getDashboardData() {
     topActions,
     todayProgress,
     todayRecommendations,
+    careerMemory: {
+      currentRole: careerProfileRes.data?.current_role ?? null,
+      currentCompany: careerProfileRes.data?.current_company ?? null,
+      targetRole: careerProfileRes.data?.target_role ?? null,
+      currentSalary: careerProfileRes.data?.current_salary ?? null,
+    },
+    recentPatterns,
   }
 }

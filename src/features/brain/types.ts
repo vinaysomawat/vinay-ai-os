@@ -23,6 +23,14 @@ export interface ScoreExplanationResult {
   modules: ScoreExplanation[]
 }
 
+export interface Decision {
+  decision: string
+  reasoning: string
+  tradeoffs: string[]
+  confidence: 'high' | 'medium' | 'low'
+  actionItems: string[]
+}
+
 // Reshapes getDashboardData()'s already-fetched, already-summarized output
 // into the "Unified Context" shape from PRDs/phase2.md — no new queries here,
 // per Core Principle 2 (the Brain never duplicates business logic or
@@ -31,15 +39,23 @@ export interface BrainContext {
   today: string
   lifeScore: number
   planner: { pendingTaskCount: number }
-  career: { activeApplications: number }
+  career: {
+    activeApplications: number
+    // "Memory" (Phase 2 PRD) — read straight from career_profile, the Brain
+    // doesn't own or duplicate this data, per Core Principle 1.
+    currentRole: string | null
+    currentCompany: string | null
+    targetRole: string | null
+    currentSalary: number | null
+  }
   finance: { monthSpend: number; monthBudget: number }
   health: { workoutsToday: number; todayMetric: Record<string, unknown> | null }
   learning: { inProgress: number }
   coding: { solved30d: number }
   documents: { count: number }
   signals: { emoji: string; text: string; href: string }[]
-  // Not populated until Pattern Detection (M4) exists — kept here now so the
-  // shape matches the PRD from day one instead of needing a breaking change later.
   weeklyPatterns: string[]
+  // Not populated yet — no monthly-cadence pattern job exists (only the
+  // weekly one), kept here so the shape matches the PRD without a breaking change later.
   monthlyPatterns: string[]
 }

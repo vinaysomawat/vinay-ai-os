@@ -9,7 +9,9 @@ import MiniRing from './MiniRing'
 import RealtimeRefresh from './RealtimeRefresh'
 import BotActivityCard from './BotActivityCard'
 import ScoreExplainer from '@/features/brain/components/ScoreExplainer'
+import BrainAdvisorTrigger from '@/features/brain/components/BrainAdvisorTrigger'
 import { explainScore } from '@/features/brain/calculations'
+import { buildBrainContext } from '@/features/brain/context-builder'
 import type { getDashboardData } from '../actions'
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -64,6 +66,7 @@ function computeInsights(
 export default function DashboardView({ data }: { data: DashboardData }) {
   const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, scoreHistory, todayHealth, aiBudget, topActions, todayProgress, todayRecommendations } = data
   const scoreExplanation = explainScore(scoreHistory, scores, scoreTips)
+  const brainContext = buildBrainContext(data)
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -91,6 +94,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-4">
       <RealtimeRefresh />
+      <BrainAdvisorTrigger context={brainContext} />
       {/* Header — the page title itself lives in the shared Header (h1 "Dashboard"); this is just a slim status line, not a second title */}
       <div className="flex items-center justify-between flex-wrap gap-1">
         <p className="text-sm font-medium text-slate-300">{greeting}, Vinay</p>
