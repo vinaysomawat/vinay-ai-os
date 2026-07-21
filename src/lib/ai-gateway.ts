@@ -26,6 +26,7 @@ export type AITask =
   | 'brain_qa'
   | 'brain_decision'
   | 'brain_weekly_reflection'
+  | 'brain_monthly_review'
 
 interface TaskConfig {
   model: string
@@ -60,6 +61,7 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   brain_qa:               { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   brain_decision:         { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '{}' },
   brain_weekly_reflection:{ model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: "Couldn't generate this week's reflection right now — try again shortly." },
+  brain_monthly_review:   { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '{}' },
 }
 
 // Static per-model pricing, USD per 1M tokens (Sonnet 4.6 / Haiku 4.5).

@@ -2,13 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { askAI } from '@/lib/ai-gateway'
-import { getWeeklyReflectionContext } from './context-builder'
+import { getWeeklyReflectionContext, getMonthlyReviewContext } from './context-builder'
 import {
   buildContextSummary, buildBrainPrompt, buildDecisionPrompt, BRAIN_SYSTEM_PROMPT, BRAIN_DECISION_SYSTEM_PROMPT,
   buildWeeklyReflectionContextSummary, buildWeeklyReflectionPrompt, WEEKLY_REFLECTION_SYSTEM_PROMPT,
+  buildMonthlyReviewContextSummary, buildMonthlyReviewPrompt, BRAIN_MONTHLY_REVIEW_SYSTEM_PROMPT,
   type BrainMessage,
 } from './prompts'
-import type { BrainContext, Decision, WeeklyReflectionContext } from './types'
+import type { BrainContext, Decision, WeeklyReflectionContext, MonthlyReview, MonthlyReviewContext } from './types'
 
 export async function askBrain(question: string, context: BrainContext, history: BrainMessage[] = []): Promise<string> {
   if (!question.trim()) return "Ask me something about your day, your goals, or a decision you're weighing."
@@ -69,4 +70,50 @@ export async function getWeeklyReflection(): Promise<WeeklyReflection> {
   const paragraph = await askAI('brain_weekly_reflection', prompt, WEEKLY_REFLECTION_SYSTEM_PROMPT, { userId: user.id })
 
   return { paragraph, stats }
+}
+
+const EMPTY_MONTHLY_REVIEW: MonthlyReview = {
+  career: '', finance: '', health: '', learning: '', coding: '',
+  overall: 'Not enough data logged this month yet — keep tracking and check back later.',
+  biggestAchievement: '', biggestMistake: '', recommendation: '',
+}
+
+export interface MonthlyReviewResult {
+  review: MonthlyReview
+  stats: MonthlyReviewContext | null
+}
+
+// Takes the already-built BrainContext (like askBrain/askBrainDecision do)
+// for the Career/Finance-total/Learning/Coding snapshot fields it needs —
+// only the 30-day score trend, patterns, and spend-category breakdown are
+// fetched fresh here, since those aren't part of the per-render snapshot.
+export async function getMonthlyReview(context: BrainContext): Promise<MonthlyReviewResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { review: { ...EMPTY_MONTHLY_REVIEW, overall: 'Sign in to see your monthly review.' }, stats: null }
+
+  const stats = await getMonthlyReviewContext(supabase, user.id)
+  if (!stats) return { review: EMPTY_MONTHLY_REVIEW, stats: null }
+
+  const contextSummary = buildMonthlyReviewContextSummary(stats, context)
+  const prompt = buildMonthlyReviewPrompt(contextSummary)
+  const raw = await askAI('brain_monthly_review', prompt, BRAIN_MONTHLY_REVIEW_SYSTEM_PROMPT, { userId: user.id })
+
+  try {
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) return { review: EMPTY_MONTHLY_REVIEW, stats }
+    const parsed = JSON.parse(match[0]) as Partial<MonthlyReview>
+    if (!parsed.overall) return { review: EMPTY_MONTHLY_REVIEW, stats }
+    return {
+      review: {
+        career: parsed.career ?? '', finance: parsed.finance ?? '', health: parsed.health ?? '',
+        learning: parsed.learning ?? '', coding: parsed.coding ?? '', overall: parsed.overall,
+        biggestAchievement: parsed.biggestAchievement ?? '', biggestMistake: parsed.biggestMistake ?? '',
+        recommendation: parsed.recommendation ?? '',
+      },
+      stats,
+    }
+  } catch {
+    return { review: EMPTY_MONTHLY_REVIEW, stats }
+  }
 }

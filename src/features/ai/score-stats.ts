@@ -37,3 +37,14 @@ export function computeScoreStats(logs: ScoreLogRow[]): ScoreStats {
     topModule, weakModule,
   }
 }
+
+// Shared with the Telegram digest's formatSpend() and Monthly Executive
+// Review's top-spend-category line — highest-spend category first.
+export function computeCategoryTotals(expenses: { amount: number; category: string }[]): [string, number][] {
+  const totals = new Map<string, number>()
+  for (const e of expenses) {
+    const amt = Number(e.amount ?? 0)
+    totals.set(e.category, (totals.get(e.category) ?? 0) + amt)
+  }
+  return [...totals.entries()].sort((a, b) => b[1] - a[1])
+}

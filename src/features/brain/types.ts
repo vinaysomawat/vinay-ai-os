@@ -44,6 +44,36 @@ export interface WeeklyReflectionContext {
   patterns: string[]
 }
 
+// Feeds Monthly Executive Review — the trailing-30-days counterpart, same
+// shape as Weekly plus the top/weak module and this calendar month's top
+// spend category (the one piece not already sitting in BrainContext).
+export interface MonthlyReviewContext {
+  daysTracked: number
+  avgLife: number
+  moduleAvgs: { Health: number; Finance: number; Career: number; Learning: number; Projects: number }
+  best: { date: string; score: number }
+  worst: { date: string; score: number }
+  topModule: [string, number]
+  weakModule: [string, number]
+  topSpendCategory: { name: string; amount: number } | null
+  patterns: string[]
+}
+
+// Structured output for the Monthly tab — unlike Weekly Reflection's single
+// paragraph, the PRD asks for discrete fields (Career/Finance/Health/
+// Learning/Coding/Overall + achievement/mistake/recommendation).
+export interface MonthlyReview {
+  career: string
+  finance: string
+  health: string
+  learning: string
+  coding: string
+  overall: string
+  biggestAchievement: string
+  biggestMistake: string
+  recommendation: string
+}
+
 // Reshapes getDashboardData()'s already-fetched, already-summarized output
 // into the "Unified Context" shape from PRDs/phase2.md — no new queries here,
 // per Core Principle 2 (the Brain never duplicates business logic or

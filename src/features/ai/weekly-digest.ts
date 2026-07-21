@@ -3,23 +3,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { askAI } from '@/lib/ai-gateway'
 import { daysAgoIST } from '@/lib/date'
-import { computeScoreStats } from './score-stats'
+import { computeScoreStats, computeCategoryTotals } from './score-stats'
 
 // Deterministic — no AI. Highest-spend category first.
 function formatSpend(expenses: { amount: number; category: string }[], periodLabel: string): string {
   if (expenses.length === 0) return ''
 
-  const totalsByCategory = new Map<string, number>()
-  let total = 0
-  for (const e of expenses) {
-    const amt = Number(e.amount ?? 0)
-    total += amt
-    totalsByCategory.set(e.category, (totalsByCategory.get(e.category) ?? 0) + amt)
-  }
-
-  const lines = [...totalsByCategory.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat, spent]) => `• ${cat}: ₹${Math.round(spent).toLocaleString('en-IN')}`)
+  const totals = computeCategoryTotals(expenses)
+  const total = totals.reduce((sum, [, amt]) => sum + amt, 0)
+  const lines = totals.map(([cat, spent]) => `• ${cat}: ₹${Math.round(spent).toLocaleString('en-IN')}`)
 
   return `\n\n💸 *This ${periodLabel}'s spend (₹${Math.round(total).toLocaleString('en-IN')} total):*\n${lines.join('\n')}`
 }

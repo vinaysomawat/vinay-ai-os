@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { todayIST, daysAgoIST } from '@/lib/date'
-import { computeScoreStats } from '@/features/ai/score-stats'
+import { computeScoreStats, computeCategoryTotals } from '@/features/ai/score-stats'
 import { getRecentPatterns } from './signals'
 import type { getDashboardData } from '@/features/dashboard/actions'
-import type { BrainContext, WeeklyReflectionContext } from './types'
+import type { BrainContext, WeeklyReflectionContext, MonthlyReviewContext } from './types'
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>
 
@@ -58,4 +58,34 @@ export async function getWeeklyReflectionContext(supabase: SupabaseClient, userI
 
   const { daysTracked, avgLife, moduleAvgs, best, worst } = computeScoreStats(logs)
   return { daysTracked, avgLife, moduleAvgs, best, worst, patterns }
+}
+
+// Trailing-30-days counterpart, feeding Monthly Executive Review. Same
+// life_score_logs aggregation as above with a wider window, plus this
+// calendar month's top spend category — the one number not already sitting
+// in BrainContext (which only has the month's total, not a breakdown).
+// Career/Finance-total/Learning/Coding figures are read from the caller's
+// already-built BrainContext instead of re-querying them here.
+export async function getMonthlyReviewContext(supabase: SupabaseClient, userId: string): Promise<MonthlyReviewContext | null> {
+  const since = daysAgoIST(30)
+  const monthStart = todayIST().slice(0, 7) + '-01'
+
+  const [{ data: logs }, { data: expenses }, patterns] = await Promise.all([
+    supabase
+      .from('life_score_logs')
+      .select('date, life_score, health_score, finance_score, career_score, learning_score, projects_score')
+      .eq('user_id', userId)
+      .gte('date', since)
+      .order('date', { ascending: true }),
+    supabase.from('expenses').select('amount, category').eq('user_id', userId).gte('date', monthStart),
+    getRecentPatterns(supabase, userId),
+  ])
+
+  if (!logs || logs.length < 5) return null
+
+  const { daysTracked, avgLife, moduleAvgs, best, worst, topModule, weakModule } = computeScoreStats(logs)
+  const categoryTotals = computeCategoryTotals(expenses ?? [])
+  const topSpendCategory = categoryTotals.length > 0 ? { name: categoryTotals[0][0], amount: categoryTotals[0][1] } : null
+
+  return { daysTracked, avgLife, moduleAvgs, best, worst, topModule, weakModule, topSpendCategory, patterns }
 }

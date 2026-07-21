@@ -1,4 +1,4 @@
-import type { BrainContext, WeeklyReflectionContext } from './types'
+import type { BrainContext, WeeklyReflectionContext, MonthlyReviewContext } from './types'
 
 export const BRAIN_SYSTEM_PROMPT = `You are Vinay's personal Brain — a single assistant that understands his whole life across Planner, Career, Finance, Health, Learning, and Coding, and helps him make decisions.
 
@@ -91,4 +91,46 @@ export function buildWeeklyReflectionContextSummary(ctx: WeeklyReflectionContext
 
 export function buildWeeklyReflectionPrompt(contextSummary: string): string {
   return `This week's data:\n${contextSummary}\n\nWrite Vinay's weekly reflection.`
+}
+
+export const BRAIN_MONTHLY_REVIEW_SYSTEM_PROMPT = `You are Vinay's personal Brain, writing his Monthly Executive Review from his last 30 days of Life Score data, this month's spending, and detected patterns.
+
+Rules:
+- Use only the numbers and patterns given below. Never invent a specific event, application, workout, or transaction that isn't in the data.
+- Each field must be 1-2 sentences, direct and specific — reference the actual scores/numbers given, not generic encouragement.
+- biggestAchievement and biggestMistake must each point at one specific thing grounded in the data (e.g. a module's score, best/worst day, or the top spend category) — never something invented.
+- recommendation must be one concrete, actionable next step, not "keep improving."
+- If days tracked is low (fewer than 10), say so plainly in "overall" instead of fabricating a fuller picture.
+
+Respond with ONLY a JSON object, no markdown, no code fences, matching exactly this shape:
+{"career": "...", "finance": "...", "health": "...", "learning": "...", "coding": "...", "overall": "...", "biggestAchievement": "...", "biggestMistake": "...", "recommendation": "..."}`
+
+// Same "one line per fact" style as the other Brain prompts — combines the
+// 30-day MonthlyReviewContext with the Career/Finance-total/Learning/Coding
+// snapshot fields already sitting in the caller's BrainContext, so this is
+// the only place that re-fetches anything (topSpendCategory + patterns).
+export function buildMonthlyReviewContextSummary(ctx: MonthlyReviewContext, brain: BrainContext): string {
+  const lines = [
+    `Days tracked this month: ${ctx.daysTracked}/30`,
+    `Average Life Score: ${ctx.avgLife}/100`,
+    `Best day: ${ctx.best.date} (${ctx.best.score}/100)`,
+    `Worst day: ${ctx.worst.date} (${ctx.worst.score}/100)`,
+    `Strongest module: ${ctx.topModule[0]} (avg ${ctx.topModule[1]})`,
+    `Weakest module: ${ctx.weakModule[0]} (avg ${ctx.weakModule[1]})`,
+    `Module averages — Health: ${ctx.moduleAvgs.Health}, Finance: ${ctx.moduleAvgs.Finance}, Career: ${ctx.moduleAvgs.Career}, Learning: ${ctx.moduleAvgs.Learning}, Projects: ${ctx.moduleAvgs.Projects}`,
+    `Finance: ₹${Math.round(brain.finance.monthSpend)} spent of ₹${Math.round(brain.finance.monthBudget)} budget this month${ctx.topSpendCategory ? `, top category: ${ctx.topSpendCategory.name} (₹${Math.round(ctx.topSpendCategory.amount).toLocaleString('en-IN')})` : ''}`,
+    `Career: ${brain.career.activeApplications} active applications`,
+    `Learning: ${brain.learning.inProgress} resources in progress`,
+    `Coding: ${brain.coding.solved30d} questions solved in the last 30 days`,
+  ]
+  if (ctx.patterns.length > 0) {
+    lines.push('Confirmed patterns: ' + ctx.patterns.join('; '))
+  } else {
+    lines.push('No confirmed recurring patterns yet.')
+  }
+  return lines.join('\n')
+}
+
+export function buildMonthlyReviewPrompt(contextSummary: string): string {
+  return `This month's data:\n${contextSummary}\n\nWrite Vinay's Monthly Executive Review.`
 }
