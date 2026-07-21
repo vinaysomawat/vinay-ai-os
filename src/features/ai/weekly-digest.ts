@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { askAI } from '@/lib/ai-gateway'
 import { daysAgoIST } from '@/lib/date'
+import { computeScoreStats } from './score-stats'
 
 // Deterministic — no AI. Highest-spend category first.
 function formatSpend(expenses: { amount: number; category: string }[], periodLabel: string): string {
@@ -46,27 +47,13 @@ async function generateDigest(
     return `No data logged this ${periodLabel}. Open your dashboard and start tracking!${spendSection}`
   }
 
-  const avg = (key: string) => Math.round(logs.reduce((s: number, r: Record<string, unknown>) => s + (r[key] as number), 0) / logs.length)
-
-  const avgLife     = avg('life_score')
-  const avgHealth   = avg('health_score')
-  const avgFinance  = avg('finance_score')
-  const avgCareer   = avg('career_score')
-  const avgLearning = avg('learning_score')
-  const avgProjects = avg('projects_score')
-
-  const best  = logs.reduce((a, b) => a.life_score > b.life_score ? a : b)
-  const worst = logs.reduce((a, b) => a.life_score < b.life_score ? a : b)
-
-  const moduleAvgs = { Health: avgHealth, Finance: avgFinance, Career: avgCareer, Learning: avgLearning, Projects: avgProjects }
-  const topModule  = Object.entries(moduleAvgs).sort(([, a], [, b]) => b - a)[0]
-  const weakModule = Object.entries(moduleAvgs).sort(([, a], [, b]) => a - b)[0]
+  const { avgLife, moduleAvgs, best, worst, topModule, weakModule } = computeScoreStats(logs)
 
   const prompt = `${periodLabel[0].toUpperCase()}${periodLabel.slice(1)}ly life score summary for Vinay:
 Days tracked: ${logs.length}/${days}
 Average Life Score: ${avgLife}/100
-Best day: ${best.date} (${best.life_score}/100)
-Worst day: ${worst.date} (${worst.life_score}/100)
+Best day: ${best.date} (${best.score}/100)
+Worst day: ${worst.date} (${worst.score}/100)
 Strongest module: ${topModule[0]} (avg ${topModule[1]})
 Weakest module: ${weakModule[0]} (avg ${weakModule[1]})
 
@@ -82,12 +69,12 @@ Keep it personal, direct, under 80 words.`
   const scoreBar = (score: number) => '█'.repeat(Math.round(score / 10)) + '░'.repeat(10 - Math.round(score / 10))
 
   return `*Avg Life Score: ${avgLife}/100*\n` +
-    `Best: ${best.life_score} (${best.date}) · Worst: ${worst.life_score} (${worst.date})\n\n` +
-    `Health   ${scoreBar(avgHealth)} ${avgHealth}\n` +
-    `Finance  ${scoreBar(avgFinance)} ${avgFinance}\n` +
-    `Career   ${scoreBar(avgCareer)} ${avgCareer}\n` +
-    `Learning ${scoreBar(avgLearning)} ${avgLearning}\n` +
-    `Projects ${scoreBar(avgProjects)} ${avgProjects}\n\n` +
+    `Best: ${best.score} (${best.date}) · Worst: ${worst.score} (${worst.date})\n\n` +
+    `Health   ${scoreBar(moduleAvgs.Health)} ${moduleAvgs.Health}\n` +
+    `Finance  ${scoreBar(moduleAvgs.Finance)} ${moduleAvgs.Finance}\n` +
+    `Career   ${scoreBar(moduleAvgs.Career)} ${moduleAvgs.Career}\n` +
+    `Learning ${scoreBar(moduleAvgs.Learning)} ${moduleAvgs.Learning}\n` +
+    `Projects ${scoreBar(moduleAvgs.Projects)} ${moduleAvgs.Projects}\n\n` +
     `${message}${spendSection}`
 }
 

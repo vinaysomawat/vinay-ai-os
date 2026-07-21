@@ -1,8 +1,14 @@
 'use server'
 
+import { createClient } from '@/lib/supabase/server'
 import { askAI } from '@/lib/ai-gateway'
-import { buildContextSummary, buildBrainPrompt, buildDecisionPrompt, BRAIN_SYSTEM_PROMPT, BRAIN_DECISION_SYSTEM_PROMPT, type BrainMessage } from './prompts'
-import type { BrainContext, Decision } from './types'
+import { getWeeklyReflectionContext } from './context-builder'
+import {
+  buildContextSummary, buildBrainPrompt, buildDecisionPrompt, BRAIN_SYSTEM_PROMPT, BRAIN_DECISION_SYSTEM_PROMPT,
+  buildWeeklyReflectionContextSummary, buildWeeklyReflectionPrompt, WEEKLY_REFLECTION_SYSTEM_PROMPT,
+  type BrainMessage,
+} from './prompts'
+import type { BrainContext, Decision, WeeklyReflectionContext } from './types'
 
 export async function askBrain(question: string, context: BrainContext, history: BrainMessage[] = []): Promise<string> {
   if (!question.trim()) return "Ask me something about your day, your goals, or a decision you're weighing."
@@ -37,4 +43,30 @@ export async function askBrainDecision(question: string, context: BrainContext):
   } catch {
     return EMPTY_DECISION
   }
+}
+
+export interface WeeklyReflection {
+  paragraph: string
+  stats: WeeklyReflectionContext | null
+}
+
+// Self-contained (unlike askBrain/askBrainDecision above) — the dashboard's
+// per-render BrainContext only carries today's snapshot, not 7-day history,
+// so this fetches its own context on demand when the Reflect tab is opened
+// rather than adding a query to every dashboard load for an occasional feature.
+export async function getWeeklyReflection(): Promise<WeeklyReflection> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { paragraph: 'Sign in to see your weekly reflection.', stats: null }
+
+  const stats = await getWeeklyReflectionContext(supabase, user.id)
+  if (!stats) {
+    return { paragraph: "Not enough data logged this week yet — keep tracking and check back in a few days.", stats: null }
+  }
+
+  const contextSummary = buildWeeklyReflectionContextSummary(stats)
+  const prompt = buildWeeklyReflectionPrompt(contextSummary)
+  const paragraph = await askAI('brain_weekly_reflection', prompt, WEEKLY_REFLECTION_SYSTEM_PROMPT, { userId: user.id })
+
+  return { paragraph, stats }
 }

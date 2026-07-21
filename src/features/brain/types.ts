@@ -31,6 +31,19 @@ export interface Decision {
   actionItems: string[]
 }
 
+// Feeds Weekly Reflection — the trailing-7-days counterpart to BrainContext's
+// today snapshot. Built from the same life_score_logs aggregation the
+// Telegram weekly digest already computes (computeScoreStats), never a
+// second/duplicate calculation.
+export interface WeeklyReflectionContext {
+  daysTracked: number
+  avgLife: number
+  moduleAvgs: { Health: number; Finance: number; Career: number; Learning: number; Projects: number }
+  best: { date: string; score: number }
+  worst: { date: string; score: number }
+  patterns: string[]
+}
+
 // Reshapes getDashboardData()'s already-fetched, already-summarized output
 // into the "Unified Context" shape from PRDs/phase2.md — no new queries here,
 // per Core Principle 2 (the Brain never duplicates business logic or

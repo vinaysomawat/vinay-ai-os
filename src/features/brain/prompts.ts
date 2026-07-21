@@ -1,4 +1,4 @@
-import type { BrainContext } from './types'
+import type { BrainContext, WeeklyReflectionContext } from './types'
 
 export const BRAIN_SYSTEM_PROMPT = `You are Vinay's personal Brain — a single assistant that understands his whole life across Planner, Career, Finance, Health, Learning, and Coding, and helps him make decisions.
 
@@ -60,4 +60,35 @@ confidence should be "low" whenever the context is missing information that woul
 
 export function buildDecisionPrompt(contextSummary: string, question: string): string {
   return `Context:\n${contextSummary}\n\nDecision Vinay is weighing: ${question}`
+}
+
+export const WEEKLY_REFLECTION_SYSTEM_PROMPT = `You are Vinay's personal Brain, writing his weekly reflection from his last 7 days of Life Score data and detected patterns.
+
+Rules:
+- Write exactly ONE paragraph, under 150 words, plain prose — no markdown, no headings, no bullet lists.
+- Touch on: what went well (wins), what slipped (misses), any patterns worth naming, a lesson, one specific focus for next week, and a risk area to watch — woven into natural sentences, not labeled sections.
+- Use only the numbers and patterns given below. Never invent a specific event, workout, or task that isn't in the data.
+- If days tracked is low (fewer than 4), say plainly that there isn't much data yet rather than fabricating a narrative around it.
+- Be direct and specific — reference the actual scores and module names, not generic encouragement.`
+
+// Same "one line per fact" style as buildContextSummary — compact input for
+// the model, not the raw WeeklyReflectionContext object.
+export function buildWeeklyReflectionContextSummary(ctx: WeeklyReflectionContext): string {
+  const lines = [
+    `Days tracked this week: ${ctx.daysTracked}/7`,
+    `Average Life Score: ${ctx.avgLife}/100`,
+    `Best day: ${ctx.best.date} (${ctx.best.score}/100)`,
+    `Worst day: ${ctx.worst.date} (${ctx.worst.score}/100)`,
+    `Module averages — Health: ${ctx.moduleAvgs.Health}, Finance: ${ctx.moduleAvgs.Finance}, Career: ${ctx.moduleAvgs.Career}, Learning: ${ctx.moduleAvgs.Learning}, Projects: ${ctx.moduleAvgs.Projects}`,
+  ]
+  if (ctx.patterns.length > 0) {
+    lines.push('Confirmed patterns: ' + ctx.patterns.join('; '))
+  } else {
+    lines.push('No confirmed recurring patterns yet.')
+  }
+  return lines.join('\n')
+}
+
+export function buildWeeklyReflectionPrompt(contextSummary: string): string {
+  return `This week's data:\n${contextSummary}\n\nWrite Vinay's weekly reflection.`
 }
