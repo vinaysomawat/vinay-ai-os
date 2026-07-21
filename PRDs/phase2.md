@@ -2,7 +2,7 @@
 
 Version: 1.0
 
-Status: Ready for Development
+Status: Complete (2026-07-21) — see README.md's Dashboard/AI Features/Database sections for the as-built spec; two minor depth gaps left open by choice: only 2 of the 6 example pattern types in signals.ts, and monthlyPatterns stays an empty placeholder (no separate monthly-cadence pattern job).
 
 Priority: Highest
 
