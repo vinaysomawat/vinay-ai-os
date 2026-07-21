@@ -14,6 +14,7 @@ import {
   addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense,
 } from '../actions'
 import { askFinanceAdvisor } from '@/features/ai/finance-advisor'
+import ScenarioSimulator from './ScenarioSimulator'
 import { CATEGORIES, INVESTMENT_TYPES, INVESTMENT_COLOR } from '../types'
 import type { Expense, Budget, FinanceProfile, Loan, Investment, FinancialGoal, RecurringExpense, InvestmentType, GoalPriority } from '../types'
 import { useEscapeKey } from '@/lib/use-escape-key'
@@ -95,6 +96,7 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
   const [addingSip, setAddingSip] = useState(false)
 
   // AI Advisor
+  const [advisorTab, setAdvisorTab] = useState<'ask' | 'simulate'>('ask')
   const [aiQuestion, setAiQuestion] = useState('')
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -296,30 +298,41 @@ export default function FinanceView({ expenses, budgets, profile, loans, investm
 
   const advisorPortal = useAIAdvisor('Money Advisor', Sparkles, (
     <div className="space-y-3">
-      <div className="flex gap-2 flex-wrap text-xs text-slate-600">
-        {['Can I afford a car?', 'Should I prepay my loan?', 'How much should I invest?', 'When can I retire?'].map(q => (
-          <button key={q} onClick={() => setAiQuestion(q)} className="px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
-        ))}
+      <div className="flex gap-1 bg-surface-2 rounded-lg p-0.5">
+        <button onClick={() => setAdvisorTab('ask')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${advisorTab === 'ask' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Ask</button>
+        <button onClick={() => setAdvisorTab('simulate')} className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${advisorTab === 'simulate' ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-300'}`}>Simulate</button>
       </div>
-      <div className="flex gap-2">
-        <input
-          value={aiQuestion}
-          onChange={e => setAiQuestion(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAsk()}
-          placeholder="Ask about your finances..."
-          disabled={aiLoading}
-          className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
-        />
-        <button onClick={handleAsk} disabled={aiLoading || !aiQuestion.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
-          {aiLoading ? '...' : 'Ask'}
-        </button>
-      </div>
-      {aiLoading && (
-        <div className="space-y-2">
-          {[90, 75, 80].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
-        </div>
+
+      {advisorTab === 'ask' ? (
+        <>
+          <div className="flex gap-2 flex-wrap text-xs text-slate-600">
+            {['Can I afford a car?', 'Should I prepay my loan?', 'How much should I invest?', 'When can I retire?'].map(q => (
+              <button key={q} onClick={() => setAiQuestion(q)} className="px-2 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 hover:text-slate-400 transition-colors">{q}</button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={aiQuestion}
+              onChange={e => setAiQuestion(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAsk()}
+              placeholder="Ask about your finances..."
+              disabled={aiLoading}
+              className="flex-1 bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors"
+            />
+            <button onClick={handleAsk} disabled={aiLoading || !aiQuestion.trim()} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors">
+              {aiLoading ? '...' : 'Ask'}
+            </button>
+          </div>
+          {aiLoading && (
+            <div className="space-y-2">
+              {[90, 75, 80].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}
+            </div>
+          )}
+          {aiAnswer && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{aiAnswer}</p>}
+        </>
+      ) : (
+        <ScenarioSimulator profile={localProfile} goals={localGoals} avgMonthlyExpense={avgMonthlyExpense} />
       )}
-      {aiAnswer && <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-l-2 border-accent/40 pl-3">{aiAnswer}</p>}
     </div>
   ))
 

@@ -2,6 +2,7 @@
 
 import { askAI } from '@/lib/ai-gateway'
 import type { FinanceProfile, Loan, Investment, FinancialGoal } from '@/features/finance/types'
+import type { PurchaseScenarioInput, PurchaseScenarioResult } from '@/features/finance/scenario-simulation'
 
 interface FinancialContext {
   profile: FinanceProfile | null
@@ -38,4 +39,29 @@ Question: ${question}`
   return askAI('finance_advisor', context, `You are Vinay's personal finance advisor. Give sharp, specific, numbers-driven advice tailored to his exact situation.
 Reference his actual salary, EMIs, and investments. Be direct — don't hedge everything.
 If recommending an investment or loan decision, give a clear verdict with reasoning. Keep it under 200 words.`)
+}
+
+// Scenario Simulation (Phase 4 PRD) — narrates the deterministic result from
+// computePurchaseScenario(). AI never computes the numbers, only explains
+// them; the prompt hands over every figure already computed, so there's
+// nothing left to invent.
+export async function narratePurchaseScenario(input: PurchaseScenarioInput, result: PurchaseScenarioResult): Promise<string> {
+  const goalLines = result.goalPaces.length > 0
+    ? result.goalPaces.map(g => g.remaining === 0
+        ? `${g.name}: already funded`
+        : g.monthsAtNewFreeCash === null
+          ? `${g.name}: ₹${g.remaining.toLocaleString('en-IN')} remaining, unfundable at this new free cash level`
+          : `${g.name}: ₹${g.remaining.toLocaleString('en-IN')} remaining, ~${g.monthsAtNewFreeCash} months if all new free cash went to it`
+      ).join('; ')
+    : 'no goals set'
+
+  const context = `Vinay is considering a purchase: total cost ₹${input.totalCost.toLocaleString('en-IN')}, ₹${input.paidUpfront.toLocaleString('en-IN')} paid upfront, financed with a ₹${input.emiAmount.toLocaleString('en-IN')}/month EMI for ${input.emiDurationMonths} months.
+
+Free cash per month before: ₹${result.freeCashBefore.toLocaleString('en-IN')}
+Free cash per month after: ₹${result.freeCashAfter.toLocaleString('en-IN')}
+${result.goesNegative ? 'This would put monthly cash flow NEGATIVE.' : ''}
+Goal funding pace at the new free cash level: ${goalLines}`
+
+  return askAI('finance_scenario', context, `You are Vinay's personal finance advisor, giving a verdict on a hypothetical purchase using only the numbers given below. Never invent a number not provided.
+Give a direct verdict (afford it / risky / don't) grounded in the actual before/after free cash figures and goal impact. Keep it under 150 words, no markdown.`)
 }
