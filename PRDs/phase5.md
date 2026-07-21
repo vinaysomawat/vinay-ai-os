@@ -88,6 +88,10 @@ Reflection Engine
 
 Knowledge Engine
 
+8.
+
+Automation Engine
+
 ---
 
 # Prediction Engine
@@ -209,6 +213,64 @@ Draft emails
 Book reminders
 
 Everything automatically.
+
+---
+
+# Automation Rules
+
+Phase 3/4 rules only suggest.
+
+Life OS rules act, within explicit limits.
+
+Examples
+
+Interview tomorrow
+
+↓
+
+Auto-block calendar for revision
+
+↓
+
+Auto-mute non-critical notifications
+
+---
+
+Emergency fund below target
+
+↓
+
+Auto-pause discretionary SIP top-ups
+
+↓
+
+Notify, don't ask
+
+---
+
+Coding streak at risk after 9pm
+
+↓
+
+Auto-send a reminder
+
+↓
+
+Auto-suggest the easiest unsolved question
+
+---
+
+Every rule has
+
+A trigger
+
+A condition
+
+An action
+
+A confirmation policy — auto-execute vs. ask first
+
+Rules compound. One trigger can fire multiple downstream rules across engines.
 
 ---
 
