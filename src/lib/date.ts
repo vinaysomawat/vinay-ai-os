@@ -42,3 +42,10 @@ export function daysAgoIST(n: number): string {
   const d = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() - n))
   return d.toISOString().split('T')[0]
 }
+
+// The IST hour-of-day (0-23) a timestamptz falls on — for time-of-day
+// pattern checks (e.g. "solves more in the morning"), where a plain UTC hour
+// would be off by 5.5 hours for this app's India-based user.
+export function toISTHour(iso: string): number {
+  return new Date(new Date(iso).getTime() + IST_OFFSET_MS).getUTCHours()
+}
