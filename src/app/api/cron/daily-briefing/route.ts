@@ -5,8 +5,9 @@ import { generateDailyBriefing } from '@/features/ai/daily-briefing'
 import { getReminderLines } from '@/lib/reminders'
 import { sendMessage } from '@/lib/telegram/send'
 import { logCronRun } from '@/lib/cron-log'
-import { daysAgoIST } from '@/lib/date'
+import { daysAgoIST, todayIST } from '@/lib/date'
 import { computeHealthPlan } from '@/features/health/calculations'
+import { computeCodingStats } from '@/features/coding/daily-core'
 import type { HealthProfile, HealthMetric } from '@/features/health/types'
 
 const CHAT_ID = process.env.TELEGRAM_ALLOWED_CHAT_ID!
@@ -47,6 +48,83 @@ async function computeAutomationRules(supabase: SupabaseClient, userId: string):
   return lines
 }
 
+interface Risk {
+  text: string
+  impact: 'high' | 'medium' | 'low'
+  action: string
+}
+
+const IMPACT_EMOJI: Record<Risk['impact'], string> = { high: '🔴', medium: '🟠', low: '🟡' }
+
+// Risk Engine (Phase 4 PRD) — forward-looking, deterministic-only (Product
+// Principle 2). No fabricated probability numbers: severity is expressed as
+// a plain impact tier grounded in real thresholds, never an invented
+// statistic. Appended to the same morning push as Automation Rules above.
+async function computeRiskEngine(supabase: SupabaseClient, userId: string): Promise<Risk[]> {
+  const today = todayIST()
+  const [{ data: expenses }, { data: budgets }, { data: metrics }, { data: todayCoding }, codingStats] = await Promise.all([
+    supabase.from('expenses').select('amount').eq('user_id', userId).gte('date', today.slice(0, 7) + '-01'),
+    supabase.from('budgets').select('amount').eq('user_id', userId).eq('month', today.slice(0, 7)),
+    supabase.from('health_metrics').select('date, protein_g').eq('user_id', userId).gte('date', daysAgoIST(6)).not('protein_g', 'is', null),
+    supabase.from('coding_daily_questions').select('completed').eq('user_id', userId).eq('assigned_date', today),
+    computeCodingStats(supabase, userId),
+  ])
+
+  const risks: Risk[] = []
+
+  // Risk: on pace to exceed this month's budget.
+  const monthBudget = (budgets ?? []).reduce((s, b) => s + Number(b.amount ?? 0), 0)
+  const monthSpend = (expenses ?? []).reduce((s, e) => s + Number(e.amount ?? 0), 0)
+  if (monthBudget > 0) {
+    const [year, month, day] = today.split('-').map(Number)
+    const daysElapsed = day
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+    const projectedSpend = (monthSpend / daysElapsed) * daysInMonth
+    const overBy = projectedSpend - monthBudget
+    if (overBy / monthBudget >= 0.05) {
+      const ratio = overBy / monthBudget
+      risks.push({
+        text: `At your current pace (₹${Math.round(monthSpend / daysElapsed).toLocaleString('en-IN')}/day), you're projected to spend ₹${Math.round(projectedSpend).toLocaleString('en-IN')} this month — ₹${Math.round(overBy).toLocaleString('en-IN')} over your ₹${Math.round(monthBudget).toLocaleString('en-IN')} budget.`,
+        impact: ratio >= 0.25 ? 'high' : ratio >= 0.15 ? 'medium' : 'low',
+        action: 'Pull back discretionary spending for the rest of the month.',
+      })
+    }
+  }
+
+  // Risk: protein intake declining over the last few days.
+  const proteinRows = (metrics ?? []) as { date: string; protein_g: number }[]
+  if (proteinRows.length >= 6) {
+    const sorted = [...proteinRows].sort((a, b) => a.date.localeCompare(b.date))
+    const recent3 = sorted.slice(-3)
+    const prior3 = sorted.slice(-6, -3)
+    if (recent3.length === 3 && prior3.length === 3) {
+      const avg = (arr: typeof sorted) => arr.reduce((s, r) => s + r.protein_g, 0) / arr.length
+      const recentAvg = avg(recent3)
+      const priorAvg = avg(prior3)
+      if (priorAvg > 0 && (priorAvg - recentAvg) / priorAvg >= 0.2) {
+        risks.push({
+          text: `Protein intake has declined from ~${Math.round(priorAvg)}g to ~${Math.round(recentAvg)}g avg over the last 3 days.`,
+          impact: 'medium',
+          action: 'Add a protein-heavy meal today to reverse the trend.',
+        })
+      }
+    }
+  }
+
+  // Risk: coding streak open for today.
+  const todayRows = (todayCoding ?? []) as { completed: boolean }[]
+  const todayOpen = todayRows.length > 0 && todayRows.every(r => !r.completed)
+  if (todayOpen && codingStats.currentStreak > 0) {
+    risks.push({
+      text: `You have a ${codingStats.currentStreak}-day coding streak, and today's question isn't solved yet.`,
+      impact: codingStats.currentStreak >= 7 ? 'high' : 'medium',
+      action: "Solve today's question to keep the streak alive.",
+    })
+  }
+
+  return risks
+}
+
 export async function GET(req: Request) {
   // Verify Vercel cron secret
   const auth = req.headers.get('authorization')
@@ -62,15 +140,19 @@ export async function GET(req: Request) {
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })
 
-  const [body, reminders, automationRules] = await Promise.all([
+  const [body, reminders, automationRules, risks] = await Promise.all([
     generateDailyBriefing(supabase, user.id),
     getReminderLines(supabase, user.id, 'morning'),
     computeAutomationRules(supabase, user.id),
+    computeRiskEngine(supabase, user.id),
   ])
 
   const automationSection = automationRules.length > 0 ? `\n\n${automationRules.join('\n\n')}` : ''
+  const riskSection = risks.length > 0
+    ? `\n\n⚠️ *Risks*\n\n${risks.map(r => `${IMPACT_EMOJI[r.impact]} ${r.text}\n   → ${r.action}`).join('\n\n')}`
+    : ''
 
-  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `🌅 *Good Morning, Vinay!*\n\n${body}${automationSection}${reminders}\n\n_Open your dashboard → vinay-ai-os.vercel.app_`)
+  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `🌅 *Good Morning, Vinay!*\n\n${body}${automationSection}${riskSection}${reminders}\n\n_Open your dashboard → vinay-ai-os.vercel.app_`)
 
-  return NextResponse.json({ ok: true, automationRules: automationRules.length })
+  return NextResponse.json({ ok: true, automationRules: automationRules.length, risks: risks.length })
 }
