@@ -48,7 +48,7 @@ const dummyData = {
     { emoji: '💻', text: "Solve today's coding question", href: '/coding' },
     { emoji: '💸', text: "Log today's expenses", href: '/finance' },
   ],
-  careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null },
+  careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null, bio: null },
   financialGoals: [],
   recentPatterns: [],
 }

@@ -90,6 +90,11 @@ export interface BrainContext {
     currentCompany: string | null
     targetRole: string | null
     currentSalary: number | null
+    // "Memory" (Phase 4 PRD's Executive Memory) — the Career profile's
+    // existing free-text Bio/Focus field, read straight through same as the
+    // rest of this block. Not fed into weekly/monthly review (those are
+    // number-focused retrospectives, not a "who are you" personality note).
+    bio: string | null
   }
   finance: {
     monthSpend: number

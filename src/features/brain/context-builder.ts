@@ -25,6 +25,7 @@ export function buildBrainContext(data: DashboardData): BrainContext {
       currentCompany: data.careerMemory.currentCompany,
       targetRole: data.careerMemory.targetRole,
       currentSalary: data.careerMemory.currentSalary,
+      bio: data.careerMemory.bio,
     },
     finance: { monthSpend: data.stats.monthSpend, monthBudget: data.stats.monthBudget, goals: data.financialGoals },
     health: { workoutsToday: data.stats.workoutsToday, todayMetric: data.todayHealth },
