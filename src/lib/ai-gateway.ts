@@ -57,14 +57,14 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   resource_quiz:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '[]' },
   coding_mentor:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   module_recommendations: { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '[]' },
-  daily_briefing:         { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '' },
-  weekly_digest:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '' },
-  monthly_digest:         { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '' },
+  daily_briefing:         { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
+  weekly_digest:          { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
+  monthly_digest:         { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
   brain_qa:               { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   brain_decision:         { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '{}' },
   brain_weekly_reflection:{ model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: "Couldn't generate this week's reflection right now — try again shortly." },
   brain_monthly_review:   { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '{}' },
-  daily_journal:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '' },
+  daily_journal:          { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
   finance_scenario:       { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
 }
 
