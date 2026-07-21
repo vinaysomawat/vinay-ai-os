@@ -13,11 +13,12 @@ Rules:
 - If very little was logged today, say so plainly rather than padding it out.
 - Be specific and grounded — reference the actual numbers/items given, not generic reflection.`
 
-// Phase 3 PRD's "Daily Auto Journal" — gathers today's itemized activity
-// across modules. Deliberately scoped to what's reliably timestamped:
-// tasks.done has no completed_at (only coding/trending's synced rows do),
-// so plain Planner task completions aren't included here — see README.
-export async function generateDailyJournal(db: SupabaseClient, userId: string): Promise<string> {
+// Shared by Daily Auto Journal (Phase 3 PRD) and Evening Reflection (Phase 5
+// PRD) — both narrate "today's itemized activity," just at different times
+// of day and with a different closing line. Deliberately scoped to what's
+// reliably timestamped: tasks.done has no completed_at (only coding/trending's
+// synced rows do), so plain Planner task completions aren't included — see README.
+export async function gatherTodayActivityLines(db: SupabaseClient, userId: string): Promise<string[]> {
   const today = todayIST()
 
   const [
@@ -69,6 +70,12 @@ export async function generateDailyJournal(db: SupabaseClient, userId: string): 
 
   const apps = appsRes.data ?? []
   if (apps.length > 0) lines.push(`Submitted ${apps.length} new application${apps.length > 1 ? 's' : ''}: ${apps.map(a => `${a.company} (${a.role})`).join(', ')}`)
+
+  return lines
+}
+
+export async function generateDailyJournal(db: SupabaseClient, userId: string): Promise<string> {
+  const lines = await gatherTodayActivityLines(db, userId)
 
   if (lines.length === 1) {
     return "Nothing was logged today — a quiet day in the system, even if not necessarily in real life."

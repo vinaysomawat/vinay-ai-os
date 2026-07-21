@@ -29,6 +29,7 @@ export type AITask =
   | 'brain_monthly_review'
   | 'daily_journal'
   | 'finance_scenario'
+  | 'evening_reflection'
 
 interface TaskConfig {
   model: string
@@ -66,6 +67,7 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   brain_monthly_review:   { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '{}' },
   daily_journal:          { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
   finance_scenario:       { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
+  evening_reflection:     { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
 }
 
 // Static per-model pricing, USD per 1M tokens (Sonnet 4.6 / Haiku 4.5).

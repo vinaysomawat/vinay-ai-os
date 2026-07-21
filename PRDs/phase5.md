@@ -1,474 +1,482 @@
-# Phase 5 – Life Operating System
+# PRD: Daily Operating System (DOS)
 
-Status: Vision
+Version: 1.0
 
-Priority: Ultimate
+Status: Ready for Development
+
+Priority: Highest
+
+Owner: Personal OS
 
 ---
 
 # Vision
 
-Personal OS should become the operating system for my entire life.
+Personal OS should have ONE screen that answers everything I need to know today.
 
-Not a dashboard.
-
-Not a chatbot.
-
-Not a planner.
-
-The system should continuously optimize
-
-Time
-
-Energy
-
-Money
-
-Learning
-
-Career
+Instead of opening multiple modules:
 
 Health
 
-Relationships
+Finance
 
-using AI.
+Career
 
----
+Learning
 
-# Principle
+Planner
 
-Instead of tracking life
+Coding
 
-↓
+The Daily Operating System aggregates everything into one intelligent, actionable dashboard.
 
-Understand life
+This becomes the application's home page.
 
-↓
-
-Predict life
-
-↓
-
-Optimize life
-
-↓
-
-Execute life
+It should be the only page I need to open most days.
 
 ---
 
-# Core Engines
+# Philosophy
 
-1.
+The dashboard should answer four questions:
 
-Prediction Engine
+1. What changed?
+2. What should I do?
+3. What needs attention?
+4. Am I moving toward my goals?
 
-2.
+Nothing else.
 
-Simulation Engine
+No unnecessary charts.
 
-3.
-
-Optimization Engine
-
-4.
-
-Execution Engine
-
-5.
-
-Learning Engine
-
-6.
-
-Reflection Engine
-
-7.
-
-Knowledge Engine
-
-8.
-
-Automation Engine
+No information overload.
 
 ---
 
-# Prediction Engine
+# Design Principles
 
-Predict future outcomes.
+## Action over Analytics
+
+Never show information without a possible action.
+
+Bad
+
+Calories
+1380
+
+Good
+
+420 calories remaining
+
+---
+
+## Delta over Absolute
+
+Always show change.
+
+Bad
+
+Weight
+107.8kg
+
+Good
+
+107.8kg
+
+↓ -0.4kg since yesterday
+
+---
+
+## Today's Context Only
+
+This page is about TODAY.
+
+Historical analysis belongs elsewhere.
+
+---
+
+## One Screen
+
+Everything important fits without scrolling on a laptop.
+
+Scrolling should reveal details,
+
+not required information.
+
+---
+
+# Layout
+
+---------------------------------------------------
+
+Header
+
+Good Morning Vinay 👋
+
+Tuesday, 21 July
+
+Life Score
+
+Energy Score
+
+Mood (optional)
+
+Current Streaks
+
+---------------------------------------------------
+
+Section 1
+
+What's Changed
+
+---------------------------------------------------
+
+Section 2
+
+Today's Mission
+
+---------------------------------------------------
+
+Section 3
+
+Needs Attention
+
+---------------------------------------------------
+
+Section 4
+
+Today's Schedule
+
+---------------------------------------------------
+
+Section 5
+
+Quick Actions
+
+---------------------------------------------------
+
+Section 6
+
+Today's Insights
+
+---------------------------------------------------
+
+Section 7
+
+Evening Reflection (visible after 6 PM)
+
+---------------------------------------------------
+
+---
+
+# Section 1
+
+What's Changed
+
+Purpose
+
+Quickly understand what's different since yesterday.
 
 Examples
 
-If current spending continues
-
 ↓
 
-Emergency fund exhausted in 7 months
+Weight -0.4kg
+
+↑ Coding streak 18 days
+
+↓ Budget remaining ₹1200
+
+Workout completed
+
+Interview added
+
+Expense logged
+
+Life Score +3
+
+Every item links to its source module.
+
+No AI required.
+
+Pure deterministic comparison.
 
 ---
 
-Current interview preparation
+# Section 2
 
-↓
+Today's Mission
 
-83% chance of clearing next interview
+Maximum
 
----
+Five tasks.
 
-Current calorie deficit
-
-↓
-
-Estimated weight in 90 days
-
----
-
-Current coding pace
-
-↓
-
-LeetCode goal reached in 74 days
-
----
-
-# Simulation Engine
-
-"What happens if..."
+Generated from existing Planner + Personal Brain.
 
 Examples
 
-If I buy this car
+□ Complete Chest Workout
 
-If I move to Bangalore
+□ Solve one Medium problem
 
-If I change jobs
+□ Read Angular Signals article
 
-If I invest ₹50k
+□ Stay under ₹500
 
-If I reduce gym days
+□ Reach 150g protein
 
-If I wake up at 5 AM
+Every task has
 
-If I study 3 hours daily
+Priority
 
-Brain simulates consequences.
+Estimated duration
 
----
+Module
 
-# Optimization Engine
+Complete button
 
-Given all constraints
-
-find the optimal schedule.
-
-Inputs
-
-Energy
-
-Calendar
-
-Deadlines
-
-Goals
-
-Habits
-
-Weather
-
-Travel
-
-Sleep
-
-Outputs
-
-Perfect day plan.
+Completion updates Life Score instantly.
 
 ---
 
-# Execution Engine
+# Section 3
 
-Don't recommend.
+Needs Attention
 
-Execute.
+Show only things requiring action.
 
 Examples
 
-Create calendar blocks
+⚠ EMI due tomorrow
 
-Prepare interview questions
+⚠ Protein target behind
 
-Generate grocery list
+⚠ Interview in two days
 
-Generate workout
+⚠ Coding streak at risk
 
-Create learning schedule
+⚠ Expense category exceeds budget
 
-Prepare meeting notes
+Maximum
 
-Create packing checklist
+Three items.
 
-Draft emails
-
-Book reminders
-
-Everything automatically.
+Anything more indicates prioritization failed.
 
 ---
 
-# Automation Rules
+# Section 4
 
-Phase 3/4 rules only suggest.
+Today's Schedule
 
-Life OS rules act, within explicit limits.
+Unified timeline.
 
 Examples
 
-Interview tomorrow
+09:00 Work
 
-↓
+12:30 Lunch
 
-Auto-block calendar for revision
+18:30 Gym
 
-↓
+20:00 Coding
 
-Auto-mute non-critical notifications
+22:00 Reflection
 
----
+Calendar events
 
-Emergency fund below target
-
-↓
-
-Auto-pause discretionary SIP top-ups
-
-↓
-
-Notify, don't ask
-
----
-
-Coding streak at risk after 9pm
-
-↓
-
-Auto-send a reminder
-
-↓
-
-Auto-suggest the easiest unsolved question
-
----
-
-Every rule has
-
-A trigger
-
-A condition
-
-An action
-
-A confirmation policy — auto-execute vs. ask first
-
-Rules compound. One trigger can fire multiple downstream rules across engines.
-
----
-
-# Knowledge Engine
-
-Everything I know.
-
-Everything I've learned.
-
-Everything I've experienced.
-
-Everything searchable.
-
-Brain understands
-
-connections
-
-instead of documents.
-
----
-
-# Reflection Engine
-
-Every evening
-
-What happened?
-
-What went well?
-
-What should improve?
-
-What changed?
-
-What did I learn?
-
-Memory updated automatically.
-
----
-
-# Goal Graph
-
-Goals become connected.
-
-Example
-
-Become Staff Engineer
-
-↓
-
-Requires
-
-System Design
-
-↓
-
-Requires
-
-Distributed Systems
-
-↓
-
-Requires
-
-Networking
-
-↓
-
-Requires
-
-TCP/IP
-
-Brain knows dependencies.
-
----
-
-# Life Graph
-
-Create relationships between everything.
-
-Interview
-
-↓
-
-Company
-
-↓
-
-Salary
-
-↓
-
-Savings
-
-↓
-
-House
-
-↓
-
-Loan
-
-↓
-
-Stress
-
-↓
-
-Sleep
-
-↓
+Planner tasks
 
 Workout
 
-↓
+Study sessions
 
-Performance
-
-Everything connected.
+appear together.
 
 ---
 
-# Digital Twin
+# Section 5
 
-Maintain
+Quick Actions
 
-A continuously updated model of me.
+Designed for logging in under five seconds.
 
-Current knowledge
+Buttons
 
-Current health
++ Expense
 
-Current finances
++ Weight
 
-Current personality
++ Workout
 
-Current priorities
++ Meal
 
-Current habits
++ Task
 
-Current goals
++ Note
 
-The Brain reasons over the Digital Twin.
+Forms should be minimal.
 
----
-
-# Multi-Year Planning
-
-Not
-
-Today
-
-Tomorrow
-
-This week
-
-Instead
-
-3 months
-
-6 months
-
-1 year
-
-5 years
-
-Brain continuously adjusts roadmap.
+Remember previous values where possible.
 
 ---
 
-# Explainability
+# Section 6
 
-Every recommendation includes
+Today's Insights
 
-Why
+One AI-generated insight.
 
-What data
+Examples
 
-Confidence
+"You've been most productive after morning workouts this month."
 
-Tradeoffs
+"You usually overspend on Fridays."
 
-Alternatives
+"You've consistently hit your protein target for six days."
 
-Nothing is a black box.
+Only one insight.
+
+High quality over quantity.
+
+---
+
+# Section 7
+
+Evening Reflection
+
+Visible after 6 PM.
+
+Automatically summarizes:
+
+Completed tasks
+
+Missed tasks
+
+Calories
+
+Protein
+
+Money spent
+
+Coding progress
+
+Workout
+
+Life Score change
+
+Ends with
+
+Tomorrow's top priority.
+
+Maximum
+
+200 words.
+
+---
+
+# Sidebar Widget
+
+Persistent compact widgets.
+
+Current Streak
+
+Today's Budget
+
+Protein Remaining
+
+Steps Remaining
+
+Workout Status
+
+Coding Status
+
+---
+
+# Smart Behaviors
+
+Morning
+
+Focus on planning.
+
+Afternoon
+
+Focus on progress.
+
+Evening
+
+Focus on completion.
+
+Night
+
+Focus on reflection.
+
+The same dashboard changes throughout the day.
+
+---
+
+# Animations
+
+Life Score changes animate.
+
+Mission completion updates instantly.
+
+New achievements celebrate briefly.
+
+Cards should never jump during updates.
+
+---
+
+# Mobile
+
+Cards stack vertically.
+
+Quick Actions become floating action button.
+
+Timeline collapses.
+
+Reflection becomes bottom sheet.
+
+---
+
+# Performance
+
+Dashboard loads in under 500ms.
+
+Use cached AI insight.
+
+All other cards should be deterministic.
+
+No blocking AI requests during initial load.
 
 ---
 
 # Success Criteria
 
-Personal OS should feel less like software
+When I open Personal OS in the morning,
 
-and more like
+I immediately know:
 
-having a Chief of Staff,
-Financial Planner,
-Career Coach,
-Health Coach,
-Learning Mentor,
-and Strategic Advisor
+What changed.
 
-working together every day.
+What matters.
+
+What I should do.
+
+What can wait.
+
+Without opening any other module.
+
+---
+
+# Future Enhancements (Out of Scope)
+
+- Voice briefing
+- Wearable integration
+- Calendar sync
+- Smart home actions
+- Email summarization
+
+These belong to future phases.
+
+This PRD focuses only on creating the perfect daily operating screen using existing project capabilities.

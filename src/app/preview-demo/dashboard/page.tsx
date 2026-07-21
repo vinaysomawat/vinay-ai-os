@@ -53,7 +53,7 @@ const dummyData = {
   recentPatterns: [],
 }
 
-const dummyExecutive = { brief: null, risks: [], opportunities: [] }
+const dummyExecutive = { brief: null, risks: [], opportunities: [], whatsChanged: [], codingStreak: 0 }
 
 export default function DashboardPreview() {
   return <DashboardView data={dummyData} executive={dummyExecutive} />

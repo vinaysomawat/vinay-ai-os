@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   CalendarDays, Briefcase, DollarSign, HeartPulse,
-  BookOpen, Code2, FileText, Circle, Lightbulb, Target, ListTodo,
+  BookOpen, Code2, FileText, Circle, ListTodo,
 } from 'lucide-react'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
@@ -11,6 +11,11 @@ import BotActivityCard from './BotActivityCard'
 import ScoreExplainer from '@/features/brain/components/ScoreExplainer'
 import BrainAdvisorTrigger from '@/features/brain/components/BrainAdvisorTrigger'
 import ExecutiveBrief from './ExecutiveBrief'
+import WhatsChanged from './WhatsChanged'
+import NeedsAttention from './NeedsAttention'
+import TodaysInsight from './TodaysInsight'
+import QuickStats from './QuickStats'
+import EveningReflection from './EveningReflection'
 import { explainScore } from '@/features/brain/calculations'
 import { buildBrainContext } from '@/features/brain/context-builder'
 import type { getDashboardData } from '../actions'
@@ -27,44 +32,6 @@ const STATUS_COLOR: Record<string, string> = {
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>
 
-function computeInsights(
-  stats: DashboardData['stats'],
-  scores: DashboardData['scores'],
-  todayHealth: DashboardData['todayHealth'],
-): string[] {
-  const items: string[] = []
-
-  if ((stats.monthBudget ?? 0) > 0) {
-    const rem = (stats.monthBudget ?? 0) - stats.monthSpend
-    const fmt = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString('en-IN')}`
-    items.push(rem >= 0
-      ? `${fmt(rem)} left in budget this month`
-      : `${fmt(rem)} over budget this month`)
-  }
-
-  if (todayHealth?.sleep_hours && Number(todayHealth.sleep_hours) < 7) {
-    items.push(`Slept ${todayHealth.sleep_hours}h last night — aim for 7–8h`)
-  }
-
-  if (stats.activeApplications > 0) {
-    items.push(`${stats.activeApplications} job application${stats.activeApplications > 1 ? 's' : ''} in the pipeline`)
-  }
-
-  if (stats.pendingTaskCount > 0) {
-    items.push(`${stats.pendingTaskCount} task${stats.pendingTaskCount > 1 ? 's' : ''} pending in Planner`)
-  }
-
-  if (stats.learningInProgress > 0) {
-    items.push(`${stats.learningInProgress} learning resource${stats.learningInProgress > 1 ? 's' : ''} in progress`)
-  }
-
-  if (scores.health < 40 && !todayHealth?.steps) {
-    items.push('Log your steps and water today to boost Health Score')
-  }
-
-  return items.slice(0, 6)
-}
-
 export default function DashboardView({ data, executive }: { data: DashboardData; executive: ExecutiveData }) {
   const { pendingTasks, recentApplications, botActivity, stats, scores, scoreTips, scoreHistory, todayHealth, aiBudget, topActions, todayProgress, todayRecommendations } = data
   const scoreExplanation = explainScore(scoreHistory, scores, scoreTips)
@@ -72,8 +39,6 @@ export default function DashboardView({ data, executive }: { data: DashboardData
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-
-  const insights = computeInsights(stats, scores, todayHealth)
 
   const moduleScores = [
     { label: 'Health',   score: scores.health,            color: '#ef4444', to: '/health',   tip: scoreTips.health },
@@ -103,11 +68,19 @@ export default function DashboardView({ data, executive }: { data: DashboardData
         <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">{today}</p>
       </div>
 
-      {/* Executive Brief (Phase 4 PRD) — Morning Brief, Decision Queue
-          (dismissible Risks + Opportunities), Goal Progress. Sits above
-          everything else per the PRD ("replace passive widgets... everything
-          else secondary") without removing any of the proven content below it. */}
-      <ExecutiveBrief brief={executive.brief} risks={executive.risks} opportunities={executive.opportunities} goals={data.financialGoals} />
+      {/* Daily Operating System (Phase 5 PRD) — Sidebar Widget (rendered as
+          a page-level compact strip, not the persistent nav Sidebar, see
+          QuickStats.tsx) + What's Changed, both above everything else per
+          the PRD's "one screen answers what changed/what to do/what needs
+          attention/goal progress" philosophy. */}
+      <QuickStats codingStreak={executive.codingStreak} budgetRemaining={stats.monthBudget - stats.monthSpend} workoutDoneToday={stats.workoutsToday > 0} goals={data.financialGoals} />
+      <WhatsChanged items={executive.whatsChanged} />
+
+      {/* Executive Brief (Phase 4 PRD) — Morning Brief. Decision Queue and
+          Goal Progress used to live here too; Phase 5's redesign moved them
+          into Needs Attention and Quick Stats above instead of duplicating
+          the same information across cards. */}
+      <ExecutiveBrief brief={executive.brief} />
 
       {/* Hero: Life Score + Module Scores */}
       <div className="bg-gradient-to-br from-surface-1 via-surface-2 to-surface-1 border border-surface-3 rounded-2xl p-3.5">
@@ -176,46 +149,15 @@ export default function DashboardView({ data, executive }: { data: DashboardData
           </div>
         </Card>
 
-        {/* Today's Focus + Insights side by side — both are short scannable lists */}
+        {/* Needs Attention (Today's Focus signals + Decision Queue's Risks/
+            Opportunities, capped at 3) + Today's Insight side by side. */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-          <Card title="Today's Focus" padding="p-3.5" action={<Target size={13} className="text-accent" />}>
-            {topActions.length > 0 ? (
-              <ul className="space-y-0">
-                {topActions.map((action, i) => (
-                  <li key={i}>
-                    <Link href={action.href} className="flex items-center gap-3 py-1 px-2 -mx-2 rounded-lg hover:bg-surface-2 transition-colors group">
-                      <span className="text-lg shrink-0">{action.emoji}</span>
-                      <p className="text-sm text-slate-300 flex-1">{action.text}</p>
-                      <span className="text-xs text-slate-600 group-hover:text-accent transition-colors">→</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-slate-400">Nothing urgent — you&apos;re on top of everything 🎉</p>
-              </div>
-            )}
-          </Card>
-
-          <Card title="Insights" padding="p-3.5" action={<Lightbulb size={13} className="text-amber-400" />}>
-            {insights.length > 0 ? (
-              <ul className="space-y-0.5">
-                {insights.map((insight, i) => (
-                  <li key={i} className="flex items-center gap-3 py-0.5 border-b border-surface-3 last:border-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
-                    <p className="text-sm text-slate-400">{insight}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-slate-400">Nothing to flag right now</p>
-              </div>
-            )}
-          </Card>
+          <NeedsAttention topActions={topActions} risks={executive.risks} opportunities={executive.opportunities} />
+          <TodaysInsight pattern={data.recentPatterns[0] ?? null} />
         </div>
       </div>
+
+      <EveningReflection />
 
       {/* Module grid */}
       <div>
