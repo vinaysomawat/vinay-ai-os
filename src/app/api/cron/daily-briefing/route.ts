@@ -125,6 +125,27 @@ async function computeRiskEngine(supabase: SupabaseClient, userId: string): Prom
   return risks
 }
 
+// Opportunity Engine (Phase 4 PRD) — same deterministic, cron-append pattern
+// as Risk/Automation Rules above, just the positive-signal counterpart.
+// Only one of the PRD's four examples is buildable without an integration:
+// "free Saturday → book a trek" and "salary credited → invest" need Calendar/
+// Gmail (same blockers noted throughout Phase 3); "three weeks without leave"
+// needs leave-tracking that doesn't exist anywhere in the app.
+async function computeOpportunityEngine(supabase: SupabaseClient, userId: string): Promise<string[]> {
+  const { data: interviewApps } = await supabase.from('applications').select('id').eq('user_id', userId).eq('status', 'interview')
+  const count = (interviewApps ?? []).length
+
+  const lines: string[] = []
+  // Opportunity: interview-invite surge → capitalize with extra practice,
+  // distinct from Automation Rules' single-application "lighter workout"
+  // suggestion above — this is momentum to lean into, not a load to offset.
+  if (count >= 3) {
+    lines.push(`🚀 You have ${count} active interview-stage applications — strong momentum. Consider batch-scheduling extra interview practice sessions this week to capitalize on it.`)
+  }
+
+  return lines
+}
+
 export async function GET(req: Request) {
   // Verify Vercel cron secret
   const auth = req.headers.get('authorization')
@@ -140,19 +161,21 @@ export async function GET(req: Request) {
   const user = users?.users?.[0]
   if (!user) return NextResponse.json({ error: 'No user' }, { status: 404 })
 
-  const [body, reminders, automationRules, risks] = await Promise.all([
+  const [body, reminders, automationRules, risks, opportunities] = await Promise.all([
     generateDailyBriefing(supabase, user.id),
     getReminderLines(supabase, user.id, 'morning'),
     computeAutomationRules(supabase, user.id),
     computeRiskEngine(supabase, user.id),
+    computeOpportunityEngine(supabase, user.id),
   ])
 
   const automationSection = automationRules.length > 0 ? `\n\n${automationRules.join('\n\n')}` : ''
   const riskSection = risks.length > 0
     ? `\n\n⚠️ *Risks*\n\n${risks.map(r => `${IMPACT_EMOJI[r.impact]} ${r.text}\n   → ${r.action}`).join('\n\n')}`
     : ''
+  const opportunitySection = opportunities.length > 0 ? `\n\n${opportunities.join('\n\n')}` : ''
 
-  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `🌅 *Good Morning, Vinay!*\n\n${body}${automationSection}${riskSection}${reminders}\n\n_Open your dashboard → vinay-ai-os.vercel.app_`)
+  await sendMessage(BOT_TOKEN, Number(CHAT_ID), `🌅 *Good Morning, Vinay!*\n\n${body}${automationSection}${riskSection}${opportunitySection}${reminders}\n\n_Open your dashboard → vinay-ai-os.vercel.app_`)
 
-  return NextResponse.json({ ok: true, automationRules: automationRules.length, risks: risks.length })
+  return NextResponse.json({ ok: true, automationRules: automationRules.length, risks: risks.length, opportunities: opportunities.length })
 }
