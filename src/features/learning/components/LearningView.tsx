@@ -16,6 +16,8 @@ import { todayIST, daysAgoIST } from '@/lib/date'
 import { useEscapeKey } from '@/lib/use-escape-key'
 import { useFormValidation } from '@/lib/use-form-validation'
 import FieldError from '@/components/FieldError'
+import GoalsCard from '@/features/goals/components/GoalsCard'
+import type { ResolvedGoal } from '@/features/goals/types'
 import type { Resource, ResourceStatus, ResourceType, StudyLog } from '../types'
 
 const TYPE_ICON: Record<ResourceType, string> = {
@@ -73,9 +75,10 @@ interface QuizItem { question: string; answer: string }
 interface Props {
   initialResources: Resource[]
   initialStudyLogs: StudyLog[]
+  goals: ResolvedGoal[]
 }
 
-export default function LearningView({ initialResources, initialStudyLogs }: Props) {
+export default function LearningView({ initialResources, initialStudyLogs, goals }: Props) {
   const [, startTransition] = useTransition()
   const [resources, setResources] = useState(initialResources)
   const [studyLogs, setStudyLogs] = useState(initialStudyLogs)
@@ -187,6 +190,8 @@ export default function LearningView({ initialResources, initialStudyLogs }: Pro
         <StatCard value={counts['completed']} label="Completed" valueClassName="text-green-400" />
         <StatCard value={streak} label={`${weekMinutes}m this week`} valueClassName="text-amber-400" icon={<Flame size={16} className="text-amber-400" />} />
       </div>
+
+      <GoalsCard module="learning" initialGoals={goals} autoMetric="books_completed" />
 
       {/* Revision nudge — rule-based, not AI: completed resources with no study activity in 14+ days */}
       {needsRevision.length > 0 && (

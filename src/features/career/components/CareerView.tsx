@@ -21,6 +21,8 @@ import { SKILL_CATEGORIES, SKILL_LEVEL_CONFIG, DIFFICULTY_CONFIG, QA_TOPICS } fr
 import { useEscapeKey } from '@/lib/use-escape-key'
 import { useFormValidation } from '@/lib/use-form-validation'
 import FieldError from '@/components/FieldError'
+import GoalsCard from '@/features/goals/components/GoalsCard'
+import type { ResolvedGoal } from '@/features/goals/types'
 
 const STATUS_CONFIG: Record<AppStatus, { label: string; color: string; bg: string }> = {
   applied:   { label: 'Applied',   color: 'text-blue-400',   bg: 'bg-blue-400/10' },
@@ -91,9 +93,10 @@ interface Props {
   codingStreak: number
   studyStreak: number
   resumeVersions: ResumeVersion[]
+  goals: ResolvedGoal[]
 }
 
-export default function CareerView({ applications, profile, skills, qa, codingStreak, studyStreak, resumeVersions }: Props) {
+export default function CareerView({ applications, profile, skills, qa, codingStreak, studyStreak, resumeVersions, goals }: Props) {
   const [, startTransition] = useTransition()
 
   const [localApps, setLocalApps] = useState(applications)
@@ -285,6 +288,8 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
           <ProfileField label="Bio / Focus" value={localProfile?.bio ?? ''} onSave={v => saveProfile('bio', v)} placeholder="Frontend + Testing specialist" />
         </div>
       </Card>
+
+      <GoalsCard module="career" initialGoals={goals} />
 
       {/* Resume Versions */}
       <Card title={`Resume Versions (${localResumes.length})`} action={

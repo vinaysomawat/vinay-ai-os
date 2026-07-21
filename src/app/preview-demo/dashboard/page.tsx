@@ -50,6 +50,7 @@ const dummyData = {
   ],
   careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null, bio: null },
   financialGoals: [],
+  crossModuleGoals: [],
   recentPatterns: [],
 }
 

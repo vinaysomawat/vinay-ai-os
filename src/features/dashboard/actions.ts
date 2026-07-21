@@ -17,6 +17,8 @@ import { checkRevisionNeeded } from '@/features/learning/signals'
 import { getTodayTrendingReading } from '@/features/trending/core'
 import { computeTodayProgress, getTodayRecommendations } from './daily-progress'
 import { getRecentPatterns } from '@/features/brain/signals'
+import { resolveAutoMetric } from '@/features/goals/actions'
+import type { Goal } from '@/features/goals/types'
 
 export interface TopAction {
   emoji: string
@@ -84,6 +86,7 @@ export async function getDashboardData() {
     todayRecommendations: [] as ReturnType<typeof getTodayRecommendations>,
     careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null, bio: null } as { currentRole: string | null; currentCompany: string | null; targetRole: string | null; currentSalary: number | null; bio: string | null },
     financialGoals: [] as { name: string; targetAmount: number; currentAmount: number; targetDate: string | null }[],
+    crossModuleGoals: [] as { module: string; name: string; progress: string }[],
     recentPatterns: [] as string[],
   }
 
@@ -95,7 +98,7 @@ export async function getDashboardData() {
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
     codingCompletionsRes, qaRevisionRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
-    recentPatterns, financialGoalsRes,
+    recentPatterns, financialGoalsRes, crossModuleGoalsRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
@@ -121,6 +124,7 @@ export async function getDashboardData() {
     supabase.from('daily_workouts').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', istMidnightUtc()).limit(1),
     getRecentPatterns(supabase, user.id),
     supabase.from('financial_goals').select('name, target_amount, current_amount, target_date').eq('user_id', user.id).order('priority', { ascending: true }),
+    supabase.from('goals').select('module, name, target_value, current_value, auto_metric, achieved_at').eq('user_id', user.id),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -335,6 +339,21 @@ export async function getDashboardData() {
     { onConflict: 'user_id' }
   )
 
+  // Cross-Module Goal Engine (Phase 4 PRD) — Career/Learning/Coding goals,
+  // read straight through and resolved live for auto-tracked ones (same
+  // "Brain never owns data" pattern as careerMemory/financialGoals above),
+  // feeding Ask Brain's context so recommendations can align with active goals.
+  const crossModuleGoalsRaw = (crossModuleGoalsRes.data ?? []) as Goal[]
+  const crossModuleGoals = await Promise.all(crossModuleGoalsRaw.map(async g => {
+    const current = g.auto_metric ? await resolveAutoMetric(supabase, user.id, g.auto_metric) : g.current_value
+    const progress = g.achieved_at
+      ? 'achieved'
+      : g.target_value != null
+        ? `${current ?? 0} of ${g.target_value}`
+        : 'in progress'
+    return { module: g.module, name: g.name, progress }
+  }))
+
   return {
     pendingTasks,
     recentApplications: applications.slice(0, 3),
@@ -372,6 +391,7 @@ export async function getDashboardData() {
       currentAmount: Number(g.current_amount),
       targetDate: g.target_date as string | null,
     })),
+    crossModuleGoals,
     recentPatterns,
   }
 }

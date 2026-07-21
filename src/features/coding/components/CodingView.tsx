@@ -9,6 +9,8 @@ import CodingCalendar from './CodingCalendar'
 import CodingSettingsPopover from './CodingSettingsPopover'
 import QuestionHistory from './QuestionHistory'
 import TrendingReadingCard from '@/features/trending/components/TrendingReadingCard'
+import GoalsCard from '@/features/goals/components/GoalsCard'
+import type { ResolvedGoal } from '@/features/goals/types'
 import type { DailyQuestion, CodingStats, CalendarDay, CodingSettings } from '../daily-core'
 import type { TrendingReading } from '@/features/trending/types'
 
@@ -20,9 +22,10 @@ interface Props {
   history: DailyQuestion[]
   trendingReading: TrendingReading | null
   readingHistory: TrendingReading[]
+  goals: ResolvedGoal[]
 }
 
-export default function CodingView({ dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading, readingHistory }: Props) {
+export default function CodingView({ dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading, readingHistory, goals }: Props) {
   const codingContext = `Current streak: ${codingStats.currentStreak}d (longest: ${codingStats.longestStreak}d). Total solved: ${codingStats.totalSolved} (${codingStats.easySolved} easy, ${codingStats.mediumSolved} medium, ${codingStats.hardSolved} hard). Completion rate: ${codingStats.completionRate}%.`
 
   const advisorOpen = useAIAdvisorOpen()
@@ -45,6 +48,8 @@ export default function CodingView({ dailyAssignment, codingStats, calendar, cod
       <Card title="Contribution Calendar" action={<CodingSettingsPopover initialSettings={codingSettings} />}>
         <CodingCalendar days={calendar} />
       </Card>
+
+      <GoalsCard module="coding" initialGoals={goals} autoMetric="coding_streak" />
 
       <QuestionHistory initialHistory={history} readingHistory={readingHistory} />
     </div>
