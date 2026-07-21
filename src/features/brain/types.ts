@@ -91,7 +91,13 @@ export interface BrainContext {
     targetRole: string | null
     currentSalary: number | null
   }
-  finance: { monthSpend: number; monthBudget: number }
+  finance: {
+    monthSpend: number
+    monthBudget: number
+    // "Memory" (Phase 3 PRD's Memory Evolution) — Goals, read straight from
+    // financial_goals, the Brain doesn't own or duplicate this data either.
+    goals: { name: string; targetAmount: number; currentAmount: number; targetDate: string | null }[]
+  }
   health: { workoutsToday: number; todayMetric: Record<string, unknown> | null }
   learning: { inProgress: number }
   coding: { solved30d: number }

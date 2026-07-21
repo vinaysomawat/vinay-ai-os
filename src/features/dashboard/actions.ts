@@ -83,6 +83,7 @@ export async function getDashboardData() {
     todayProgress: { items: [], completed: 0, total: 0, score: 100 } as ReturnType<typeof computeTodayProgress>,
     todayRecommendations: [] as ReturnType<typeof getTodayRecommendations>,
     careerMemory: { currentRole: null, currentCompany: null, targetRole: null, currentSalary: null } as { currentRole: string | null; currentCompany: string | null; targetRole: string | null; currentSalary: number | null },
+    financialGoals: [] as { name: string; targetAmount: number; currentAmount: number; targetDate: string | null }[],
     recentPatterns: [] as string[],
   }
 
@@ -94,7 +95,7 @@ export async function getDashboardData() {
     botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
     codingCompletionsRes, qaRevisionRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
-    recentPatterns,
+    recentPatterns, financialGoalsRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
     supabase.from('applications').select('id, company, role, status, applied_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
@@ -119,6 +120,7 @@ export async function getDashboardData() {
     getTodayTrendingReading(supabase, user.id),
     supabase.from('daily_workouts').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', istMidnightUtc()).limit(1),
     getRecentPatterns(supabase, user.id),
+    supabase.from('financial_goals').select('name, target_amount, current_amount, target_date').eq('user_id', user.id).order('priority', { ascending: true }),
   ])
 
   const pendingTasks = tasksRes.data ?? []
@@ -361,6 +363,14 @@ export async function getDashboardData() {
       targetRole: careerProfileRes.data?.target_role ?? null,
       currentSalary: careerProfileRes.data?.current_salary ?? null,
     },
+    // Memory Evolution (Phase 3 PRD) — Goals, read straight through like
+    // careerMemory above (Core Principle 1: the Brain never owns data).
+    financialGoals: (financialGoalsRes.data ?? []).map(g => ({
+      name: g.name as string,
+      targetAmount: Number(g.target_amount),
+      currentAmount: Number(g.current_amount),
+      targetDate: g.target_date as string | null,
+    })),
     recentPatterns,
   }
 }
