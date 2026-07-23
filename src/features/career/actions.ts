@@ -4,36 +4,39 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { todayIST } from '@/lib/date'
 import { computeReadiness, daysSinceLastQuiz } from './quiz-calculations'
+import { getGoals } from '@/features/goals/actions'
+import { formatGoalsContext } from '@/features/goals/format'
 import { QUIZ_TOPICS } from './types'
 import type { AppStatus, Difficulty, JDAnalysis, QuizQuestion, QuizAttempt } from './types'
 
 export async function getCareerData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { applications: [], profile: null, skills: [], quizAttempts: [], recommendedTopic: null, codingStreak: 0, studyStreak: 0 }
+  if (!user) return { applications: [], profile: null, skills: [], quizAttempts: [], recommendedTopic: null, codingStreak: 0, studyStreak: 0, goals: [] }
 
   const { computeCodingStats } = await import('@/features/coding/daily-core')
   const { getStudyStreak } = await import('@/features/learning/calculations')
 
-  const [appsRes, profileRes, skillsRes, quizAttemptsRes, codingStats, studyLogsRes] = await Promise.all([
+  const [appsRes, profileRes, skillsRes, quizAttemptsRes, codingStats, studyLogsRes, goals] = await Promise.all([
     supabase.from('applications').select('*').order('created_at', { ascending: false }),
     supabase.from('career_profile').select('*').eq('user_id', user.id).single(),
     supabase.from('skills').select('*').eq('user_id', user.id).order('category').order('level'),
     supabase.from('quiz_attempts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     computeCodingStats(supabase, user.id),
     supabase.from('study_logs').select('date').eq('user_id', user.id),
+    getGoals('career'),
   ])
 
   const quizAttempts = (quizAttemptsRes.data ?? []) as QuizAttempt[]
 
   // Cached (recommend_quiz_topic, 6h TTL) — cheap to recompute on every page
-  // load since the prompt only changes when readiness data actually changes.
+  // load since the prompt only changes when readiness data (or goals) actually change.
   const { recommendQuizTopic } = await import('@/features/ai/quiz')
   const readinessByTopic = QUIZ_TOPICS.map(topic => {
     const { tier, avgPercent } = computeReadiness(quizAttempts, topic)
     return { topic, tier, avgPercent, daysSinceLastAttempt: daysSinceLastQuiz(quizAttempts.filter(a => a.topic === topic)) }
   })
-  const recommendedTopic = await recommendQuizTopic(readinessByTopic, profileRes.data?.target_role ?? null)
+  const recommendedTopic = await recommendQuizTopic(readinessByTopic, profileRes.data?.target_role ?? null, formatGoalsContext(goals))
 
   return {
     applications: appsRes.data ?? [],
@@ -43,6 +46,7 @@ export async function getCareerData() {
     recommendedTopic,
     codingStreak: codingStats.currentStreak,
     studyStreak: getStudyStreak(studyLogsRes.data ?? []),
+    goals,
   }
 }
 

@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react'
 import Card from '@/components/Card'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
+import { formatGoalsContext } from '@/features/goals/format'
 import DailyCodingCard from './DailyCodingCard'
 import CodingCalendar from './CodingCalendar'
 import CodingSettingsPopover from './CodingSettingsPopover'
@@ -36,7 +37,7 @@ interface Props {
 }
 
 export default function CodingView({ dailyAssignment, codingStats, calendar, codingSettings, history, trendingReading, readingHistory, goals, difficultyProgression }: Props) {
-  const codingContext = `Current streak: ${codingStats.currentStreak}d (longest: ${codingStats.longestStreak}d). Total solved: ${codingStats.totalSolved} (${codingStats.easySolved} easy, ${codingStats.mediumSolved} medium, ${codingStats.hardSolved} hard). Completion rate: ${codingStats.completionRate}%.`
+  const codingContext = `Current streak: ${codingStats.currentStreak}d (longest: ${codingStats.longestStreak}d). Total solved: ${codingStats.totalSolved} (${codingStats.easySolved} easy, ${codingStats.mediumSolved} medium, ${codingStats.hardSolved} hard). Completion rate: ${codingStats.completionRate}%.${formatGoalsContext(goals)}`
 
   const advisorOpen = useAIAdvisorOpen()
   const advisorPortal = useAIAdvisor('Code Mentor', Sparkles, (
