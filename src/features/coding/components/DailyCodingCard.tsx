@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import { CheckCircle2, Circle, ExternalLink, Flame, Trophy, Moon } from 'lucide-react'
 import EmptyState from '@/components/EmptyState'
 import { markQuestionComplete } from '../daily'
-import type { DailyQuestion, CodingStats } from '../daily-core'
+import OutcomeModal from './OutcomeModal'
+import type { DailyQuestion, CodingStats, Outcome } from '../daily-core'
 
 const DIFFICULTY_COLOR: Record<string, string> = {
   easy: 'text-green-400 bg-green-500/15',
@@ -20,10 +21,12 @@ interface Props {
 export default function DailyCodingCard({ initialAssignment, stats }: Props) {
   const [assignment, setAssignment] = useState(initialAssignment)
   const [isPending, startTransition] = useTransition()
+  const [outcomeFor, setOutcomeFor] = useState<DailyQuestion | null>(null)
 
-  const handleComplete = (id: string) => {
-    setAssignment(prev => prev.map(a => a.id === id ? { ...a, completed: true } : a))
-    startTransition(async () => { await markQuestionComplete(id) })
+  const finishComplete = (id: string, outcome?: Outcome) => {
+    setAssignment(prev => prev.map(a => a.id === id ? { ...a, completed: true, outcome: outcome ?? null } : a))
+    setOutcomeFor(null)
+    startTransition(async () => { await markQuestionComplete(id, outcome ? { outcome } : undefined) })
   }
 
   return (
@@ -42,7 +45,7 @@ export default function DailyCodingCard({ initialAssignment, stats }: Props) {
         <ul className="space-y-2">
           {assignment.map(a => (
             <li key={a.id} className={`flex items-center gap-3 p-3 rounded-lg border ${a.completed ? 'bg-surface-2/50 border-surface-3' : 'bg-surface-2 border-surface-3'}`}>
-              <button onClick={() => !a.completed && handleComplete(a.id)} disabled={a.completed || isPending} aria-label="Mark question complete" className="p-1.5 -m-1.5 shrink-0">
+              <button onClick={() => !a.completed && setOutcomeFor(a)} disabled={a.completed || isPending} aria-label="Mark question complete" className="p-1.5 -m-1.5 shrink-0">
                 {a.completed ? <CheckCircle2 size={18} className="text-green-500" /> : <Circle size={18} className="text-slate-600 hover:text-accent transition-colors" />}
               </button>
               <div className="flex-1 min-w-0">
@@ -75,6 +78,15 @@ export default function DailyCodingCard({ initialAssignment, stats }: Props) {
           <p className="text-xs text-slate-600">Completion</p>
         </div>
       </div>
+
+      {outcomeFor && (
+        <OutcomeModal
+          title={outcomeFor.question.title}
+          onPick={outcome => finishComplete(outcomeFor.id, outcome)}
+          onSkip={() => finishComplete(outcomeFor.id)}
+          onClose={() => setOutcomeFor(null)}
+        />
+      )}
     </div>
   )
 }

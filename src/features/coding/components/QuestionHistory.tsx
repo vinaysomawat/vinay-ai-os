@@ -7,7 +7,8 @@ import EmptyState from '@/components/EmptyState'
 import FilterPill from '@/components/FilterPill'
 import { toggleFavorite, toggleRevisionFlag, markQuestionComplete } from '../daily'
 import { completeReading } from '@/features/trending/actions'
-import type { DailyQuestion } from '../daily-core'
+import OutcomeModal from './OutcomeModal'
+import type { DailyQuestion, Outcome } from '../daily-core'
 import type { TrendingReading } from '@/features/trending/types'
 
 const DIFFICULTY_COLOR: Record<string, string> = {
@@ -28,6 +29,7 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
   const [readings, setReadings] = useState(readingHistory ?? [])
   const [filter, setFilter] = useState<Filter>('pending')
   const [, startTransition] = useTransition()
+  const [outcomeFor, setOutcomeFor] = useState<DailyQuestion | null>(null)
 
   // The daily "Read" isn't a coding question — it has no difficulty,
   // favorite, or revision concept — so it only ever surfaces under the
@@ -65,9 +67,10 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
     startTransition(async () => { await toggleRevisionFlag(id) })
   }
 
-  const handleComplete = (id: string) => {
-    setHistory(prev => prev.map(h => h.id === id ? { ...h, completed: true } : h))
-    startTransition(async () => { await markQuestionComplete(id) })
+  const finishComplete = (id: string, outcome?: Outcome) => {
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, completed: true, outcome: outcome ?? null } : h))
+    setOutcomeFor(null)
+    startTransition(async () => { await markQuestionComplete(id, outcome ? { outcome } : undefined) })
   }
 
   const filters: { key: Filter; label: string }[] = [
@@ -108,7 +111,7 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_COLOR[h.question.difficulty]}`}>{h.question.difficulty}</span>
               <span className={`flex-1 min-w-0 text-sm truncate ${h.completed ? 'text-slate-400' : 'text-slate-300'}`}>{h.question.title}</span>
               <span className="text-xs text-slate-600 shrink-0">{h.assigned_date}</span>
-              <button onClick={() => !h.completed && handleComplete(h.id)} disabled={h.completed} aria-label="Mark question complete"
+              <button onClick={() => !h.completed && setOutcomeFor(h)} disabled={h.completed} aria-label="Mark question complete"
                 className={`p-1.5 -m-1.5 shrink-0 transition-colors ${h.completed ? 'text-green-500' : 'text-slate-600 hover:text-green-400'}`}>
                 {h.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
               </button>
@@ -124,6 +127,14 @@ export default function QuestionHistory({ initialHistory, readingHistory }: Prop
             </li>
           ))}
         </ul>
+      )}
+      {outcomeFor && (
+        <OutcomeModal
+          title={outcomeFor.question.title}
+          onPick={outcome => finishComplete(outcomeFor.id, outcome)}
+          onSkip={() => finishComplete(outcomeFor.id)}
+          onClose={() => setOutcomeFor(null)}
+        />
       )}
     </Card>
   )

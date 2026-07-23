@@ -3,12 +3,29 @@ import { todayIST, daysAgoIST } from '@/lib/date'
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
+// Self-reported at completion, the same way time_spent_minutes already is —
+// these are open-ended GreatFrontEnd-style problems (a link, not an
+// auto-graded judge), so "accuracy" can only ever be what the user reports.
+export type Outcome = 'solved' | 'solved_with_help' | 'struggled'
+
+// Fixed taxonomy (mirrors Career's QUIZ_TOPICS pattern) rather than free-text
+// tags, so weak-area/company-topic matching has a finite, consistent set to
+// compare against. Assigned to the existing question pool via a one-time AI
+// backfill from title (see scratchpad backfill script, not part of the app).
+export const CODING_TOPICS = [
+  'JavaScript Fundamentals', 'Array & Object Methods', 'Async & Promises',
+  'DOM & Browser APIs', 'UI Components', 'React & State Management',
+  'Data Structures', 'Algorithms', 'System Design', 'Performance',
+  'TypeScript', 'CSS & Layout', 'Testing', 'Networking & APIs',
+] as const
+
 export interface CodingQuestion {
   id: string
   title: string
   difficulty: Difficulty
   url: string
   source: string
+  topics: string[] | null
 }
 
 export interface DailyQuestion {
@@ -22,6 +39,8 @@ export interface DailyQuestion {
   rating: number | null
   favorite: boolean
   needs_revision: boolean
+  revision_count: number
+  outcome: Outcome | null
   task_id: string | null
   question: CodingQuestion
 }
@@ -170,6 +189,61 @@ export async function computeCodingStats(supabase: SupabaseClient, userId: strin
   }
 
   return { currentStreak, longestStreak, totalSolved, easySolved, mediumSolved, hardSolved, completionRate }
+}
+
+export interface WeakArea {
+  topic: string
+  strugglingCount: number
+  total: number
+  struggleRate: number
+}
+
+// Deterministic (Product Principle 2) — a topic is only surfaced once it has
+// at least 2 outcomes logged, so one rough question doesn't brand a whole
+// topic "weak" off a single data point. A question can carry multiple
+// topics, so it contributes to each. Sorted worst-first; feeds both the AI
+// recommendation prompt and the auto-revision-flagging rule below.
+export function computeWeakAreas(history: DailyQuestion[], minSample = 2): WeakArea[] {
+  const byTopic = new Map<string, { struggling: number; total: number }>()
+  for (const row of history) {
+    if (!row.completed || !row.outcome) continue
+    for (const topic of row.question.topics ?? []) {
+      const entry = byTopic.get(topic) ?? { struggling: 0, total: 0 }
+      entry.total++
+      if (row.outcome !== 'solved') entry.struggling++
+      byTopic.set(topic, entry)
+    }
+  }
+  return [...byTopic.entries()]
+    .filter(([, v]) => v.total >= minSample)
+    .map(([topic, v]) => ({ topic, strugglingCount: v.struggling, total: v.total, struggleRate: Math.round((v.struggling / v.total) * 100) }))
+    .sort((a, b) => b.struggleRate - a.struggleRate)
+}
+
+export interface DifficultyProgressionPoint {
+  weekStart: string
+  easy: number
+  medium: number
+  hard: number
+}
+
+// Deterministic weekly bucketing of solved counts by difficulty, oldest
+// first — feeds a trend chart the same way Dashboard/Health's already do.
+export function computeDifficultyProgression(history: DailyQuestion[], weeks = 12): DifficultyProgressionPoint[] {
+  const since = new Date(Date.now() - weeks * 7 * 86400000)
+  const buckets = new Map<string, { easy: number; medium: number; hard: number }>()
+  for (const row of history) {
+    if (!row.completed || !row.completed_at) continue
+    const d = new Date(row.completed_at)
+    if (d < since) continue
+    const weekStart = new Date(d)
+    weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay())
+    const key = weekStart.toISOString().split('T')[0]
+    const entry = buckets.get(key) ?? { easy: 0, medium: 0, hard: 0 }
+    entry[row.question.difficulty]++
+    buckets.set(key, entry)
+  }
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([weekStart, v]) => ({ weekStart, ...v }))
 }
 
 // Auto-detected complement to the manual `needs_revision` toggle — same 14-day
