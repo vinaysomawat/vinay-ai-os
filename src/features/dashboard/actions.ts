@@ -8,8 +8,8 @@ import { getActiveWorkout } from '@/features/health/workout-core'
 import type { Resource, StudyLog } from '@/features/learning/types'
 import { rankSignals, type Signal } from '@/lib/signals'
 import { checkOverdueTasks, checkHighPriorityPending } from '@/features/planner/signals'
-import { checkInterviewStage, checkQANeedsRevision } from '@/features/career/signals'
-import { getQAsNeedingRevision } from '@/features/career/calculations'
+import { checkInterviewStage, checkQuizNeedsRevision } from '@/features/career/signals'
+import { daysSinceLastQuiz } from '@/features/career/quiz-calculations'
 import { checkBudget } from '@/features/finance/signals'
 import { checkQuestionPending, checkStaleRevision } from '@/features/coding/signals'
 import { checkWorkoutPending, checkNoMetricsToday } from '@/features/health/signals'
@@ -36,7 +36,7 @@ interface TopActionInput {
   resourcesNeedingRevision: number
   codingQuestionPending: boolean
   codingStaleRevisionCount: number
-  qaNeedingRevisionCount: number
+  daysSinceLastQuiz: number | null
   workoutPending: boolean
 }
 
@@ -46,7 +46,7 @@ interface TopActionInput {
 // module's signals.ts (see src/lib/signals.ts) rather than being hand-rolled
 // here, so new modules can plug into Today's Focus without touching this file.
 function computeTopActions(input: TopActionInput): TopAction[] {
-  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, qaNeedingRevisionCount, workoutPending } = input
+  const { today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, daysSinceLastQuiz, workoutPending } = input
 
   const signals = [
     checkOverdueTasks(pendingTasks, today),
@@ -58,7 +58,7 @@ function computeTopActions(input: TopActionInput): TopAction[] {
     checkNoMetricsToday(todayMetric),
     checkRevisionNeeded(resourcesNeedingRevision),
     checkStaleRevision(codingStaleRevisionCount),
-    checkQANeedsRevision(qaNeedingRevisionCount),
+    checkQuizNeedsRevision(daysSinceLastQuiz),
   ].filter((s): s is Signal => s !== null)
 
   return rankSignals(signals, 5).map(s => ({ emoji: s.emoji, text: s.message, href: s.href }))
@@ -95,9 +95,9 @@ export async function getDashboardData() {
   const [
     tasksRes, appsRes, workoutsRes,
     expensesRes, budgetsRes, resourcesRes, docsRes,
-    botLogsRes, healthMetricRes, careerProfileRes, skillsRes, qaRes,
+    botLogsRes, healthMetricRes, careerProfileRes, skillsRes, quizCountRes,
     aiUsageMonthRes, studyLogsRes, codingTodayRows, activeWorkout, codingSolved30dRes,
-    codingCompletionsRes, qaRevisionRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
+    codingCompletionsRes, quizAttemptsRes, tasksDueTodayRes, todayTrendingReading, workoutCompletedTodayRes,
     recentPatterns, financialGoalsRes, crossModuleGoalsRes,
   ] = await Promise.all([
     supabase.from('tasks').select('id, text, done, priority, due_date').eq('user_id', user.id).eq('done', false).order('created_at', { ascending: false }).limit(5),
@@ -111,14 +111,14 @@ export async function getDashboardData() {
     supabase.from('health_metrics').select('*').eq('user_id', user.id).eq('date', today).single(),
     supabase.from('career_profile').select('current_role, target_role, current_company, current_salary, bio').eq('user_id', user.id).single(),
     supabase.from('skills').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('interview_qa').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('quiz_attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('ai_usage_logs').select('estimated_cost_usd, cache_hit, created_at').eq('user_id', user.id).gte('created_at', istDateStrToUtcMidnight(monthStart)),
     supabase.from('study_logs').select('id, date, resource_id').eq('user_id', user.id).gte('date', studyLogsSince),
     getTodayAssignmentRows(supabase, user.id),
     getActiveWorkout(supabase, user.id),
     supabase.from('coding_daily_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', true).gte('assigned_date', since30),
     supabase.from('coding_daily_questions').select('question_id, completed, completed_at').eq('user_id', user.id).eq('completed', true),
-    supabase.from('interview_qa').select('created_at, last_reviewed_at').eq('user_id', user.id),
+    supabase.from('quiz_attempts').select('created_at').eq('user_id', user.id),
     supabase.from('tasks').select('id, text, done').eq('user_id', user.id).eq('due_date', today),
     getTodayTrendingReading(supabase, user.id),
     supabase.from('daily_workouts').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', istMidnightUtc()).limit(1),
@@ -158,15 +158,15 @@ export async function getDashboardData() {
     financeScore = 60
   }
 
-  // Career: profile filled + skills + active apps + QA bank
+  // Career: profile filled + skills + active apps + quiz practice
   const profileFilled = !!(careerProfileRes.data?.current_role && careerProfileRes.data?.target_role)
   const skillCount = skillsRes.count ?? 0
-  const qaCount = qaRes.count ?? 0
+  const quizCount = quizCountRes.count ?? 0
   const careerScore = Math.min(100,
     (profileFilled ? 25 : 0) +
     Math.min(25, skillCount * 3) +
     Math.min(30, activeApps * 10) +
-    (qaCount > 0 ? 20 : 0)
+    (quizCount > 0 ? 20 : 0)
   )
 
   // Learning: completed / total (in-progress counts as half)
@@ -204,7 +204,7 @@ export async function getDashboardData() {
     [profileFilled ? 0 : 25, 'Fill in your career profile (current + target role) — worth 25 points'],
     [25 - Math.min(25, skillCount * 3), 'Add a few more skills to the tracker'],
     [30 - Math.min(30, activeApps * 10), 'No active applications — apply somewhere to earn up to 30 points'],
-    [qaCount > 0 ? 0 : 20, 'Add at least one interview Q&A — worth 20 points'],
+    [quizCount > 0 ? 0 : 20, 'Take an interview prep quiz — worth 20 points'],
   ]
   const topCareerDeficit = careerDeficits.reduce((a, b) => (b[0] > a[0] ? b : a))
   const careerTip = topCareerDeficit[0] > 0 ? topCareerDeficit[1] : 'Career basics maxed — check the AI Mentor for what\'s next'
@@ -307,7 +307,7 @@ export async function getDashboardData() {
   const resourcesNeedingRevision = getResourcesNeedingRevision(resources as Resource[], studyLogs).length
   const codingQuestionPending = codingTodayRows.length > 0 && codingTodayRows.some(r => !r.completed)
   const codingStaleRevisionCount = getStaleRevisionCount(codingCompletionsRes.data ?? [])
-  const qaNeedingRevisionCount = getQAsNeedingRevision(qaRevisionRes.data ?? []).length
+  const daysSinceLastQuizAttempt = daysSinceLastQuiz(quizAttemptsRes.data ?? [])
   const workoutPending = !!activeWorkout
 
   const workoutStatus: 'completed' | 'pending' | 'none' =
@@ -330,7 +330,7 @@ export async function getDashboardData() {
 
   const topActions = computeTopActions({
     today, pendingTasks, applications, monthSpend, monthBudget, todayMetric, workoutPending,
-    resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, qaNeedingRevisionCount,
+    resourcesNeedingRevision, codingQuestionPending, codingStaleRevisionCount, daysSinceLastQuiz: daysSinceLastQuizAttempt,
   })
 
   // Upsert XP record

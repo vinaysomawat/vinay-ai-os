@@ -13,10 +13,16 @@ export function checkInterviewStage(applications: ApplicationLike[]): Signal | n
   }
 }
 
-export function checkQANeedsRevision(count: number): Signal | null {
-  if (count === 0) return null
+export function checkQuizNeedsRevision(daysSinceLastQuiz: number | null): Signal | null {
+  if (daysSinceLastQuiz === null) {
+    return {
+      id: 'career.quiz_needs_revision', module: 'career', weight: 42, emoji: '🧠', href: '/career',
+      message: 'Take your first interview prep quiz',
+    }
+  }
+  if (daysSinceLastQuiz < 14) return null
   return {
-    id: 'career.qa_needs_revision', module: 'career', weight: 42, emoji: '🧠', href: '/career',
-    message: `${count} interview Q&A${count > 1 ? 's' : ''} not revisited in 14+ days`,
+    id: 'career.quiz_needs_revision', module: 'career', weight: 42, emoji: '🧠', href: '/career',
+    message: `No interview prep quiz in ${daysSinceLastQuiz}+ days — keep skills sharp`,
   }
 }

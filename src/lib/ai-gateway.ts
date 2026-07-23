@@ -11,8 +11,9 @@ export type AITask =
   | 'doc_summary'
   | 'doc_qa'
   | 'career_mentor'
-  | 'interview_questions'
   | 'jd_analysis'
+  | 'generate_topic_quiz'
+  | 'recommend_quiz_topic'
   | 'finance_advisor'
   | 'health_report'
   | 'health_daily_plan'
@@ -50,8 +51,9 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   doc_summary:            { model: HAIKU_MODEL,  cacheTTLSeconds: SEVEN_DAYS, fallback: '' },
   doc_qa:                 { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   career_mentor:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
-  interview_questions:    { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '[]' },
   jd_analysis:            { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: 'null' },
+  generate_topic_quiz:    { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '[]' },
+  recommend_quiz_topic:   { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '{}' },
   finance_advisor:        { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   health_report:          { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: 'No report available right now — AI budget reached for today.' },
   health_daily_plan:      { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },

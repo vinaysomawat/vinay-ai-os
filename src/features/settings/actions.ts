@@ -88,7 +88,7 @@ export async function exportAllData() {
 
   const uid = user.id
   const [
-    tasks, applications, careerProfile, skills, interviewQa,
+    tasks, applications, careerProfile, skills, interviewQa, quizAttempts,
     expenses, budgets, financeProfile, salaryHistory, loans, investments, financialGoals,
     healthMetrics, healthProfile, workouts,
     resources, studyLogs,
@@ -101,6 +101,7 @@ export async function exportAllData() {
     supabase.from('career_profile').select('*').eq('user_id', uid).maybeSingle(),
     supabase.from('skills').select('*').eq('user_id', uid),
     supabase.from('interview_qa').select('*').eq('user_id', uid),
+    supabase.from('quiz_attempts').select('*').eq('user_id', uid),
     supabase.from('expenses').select('*').eq('user_id', uid),
     supabase.from('budgets').select('*').eq('user_id', uid),
     supabase.from('finance_profile').select('*').eq('user_id', uid).maybeSingle(),
@@ -127,7 +128,7 @@ export async function exportAllData() {
     planner: { tasks: tasks.data ?? [] },
     career: {
       applications: applications.data ?? [], profile: careerProfile.data ?? null,
-      skills: skills.data ?? [], interview_qa: interviewQa.data ?? [],
+      skills: skills.data ?? [], interview_qa: interviewQa.data ?? [], quiz_attempts: quizAttempts.data ?? [],
     },
     finance: {
       expenses: expenses.data ?? [], budgets: budgets.data ?? [], profile: financeProfile.data ?? null,

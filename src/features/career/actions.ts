@@ -3,30 +3,44 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { todayIST } from '@/lib/date'
-import type { AppStatus, Difficulty, JDAnalysis } from './types'
+import { computeReadiness, daysSinceLastQuiz } from './quiz-calculations'
+import { QUIZ_TOPICS } from './types'
+import type { AppStatus, Difficulty, JDAnalysis, QuizQuestion, QuizAttempt } from './types'
 
 export async function getCareerData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { applications: [], profile: null, skills: [], qa: [], codingStreak: 0, studyStreak: 0 }
+  if (!user) return { applications: [], profile: null, skills: [], quizAttempts: [], recommendedTopic: null, codingStreak: 0, studyStreak: 0 }
 
   const { computeCodingStats } = await import('@/features/coding/daily-core')
   const { getStudyStreak } = await import('@/features/learning/calculations')
 
-  const [appsRes, profileRes, skillsRes, qaRes, codingStats, studyLogsRes] = await Promise.all([
+  const [appsRes, profileRes, skillsRes, quizAttemptsRes, codingStats, studyLogsRes] = await Promise.all([
     supabase.from('applications').select('*').order('created_at', { ascending: false }),
     supabase.from('career_profile').select('*').eq('user_id', user.id).single(),
     supabase.from('skills').select('*').eq('user_id', user.id).order('category').order('level'),
-    supabase.from('interview_qa').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+    supabase.from('quiz_attempts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     computeCodingStats(supabase, user.id),
     supabase.from('study_logs').select('date').eq('user_id', user.id),
   ])
+
+  const quizAttempts = (quizAttemptsRes.data ?? []) as QuizAttempt[]
+
+  // Cached (recommend_quiz_topic, 6h TTL) — cheap to recompute on every page
+  // load since the prompt only changes when readiness data actually changes.
+  const { recommendQuizTopic } = await import('@/features/ai/quiz')
+  const readinessByTopic = QUIZ_TOPICS.map(topic => {
+    const { tier, avgPercent } = computeReadiness(quizAttempts, topic)
+    return { topic, tier, avgPercent, daysSinceLastAttempt: daysSinceLastQuiz(quizAttempts.filter(a => a.topic === topic)) }
+  })
+  const recommendedTopic = await recommendQuizTopic(readinessByTopic, profileRes.data?.target_role ?? null)
 
   return {
     applications: appsRes.data ?? [],
     profile: profileRes.data ?? null,
     skills: skillsRes.data ?? [],
-    qa: qaRes.data ?? [],
+    quizAttempts,
+    recommendedTopic,
     codingStreak: codingStats.currentStreak,
     studyStreak: getStudyStreak(studyLogsRes.data ?? []),
   }
@@ -50,32 +64,17 @@ export async function upsertCareerProfile(fields: {
   revalidatePath('/career')
 }
 
-export async function addInterviewQA(question: string, answer: string | null, topic: string, difficulty: Difficulty) {
+export async function saveQuizAttempt(
+  topic: string, difficulty: Difficulty, questions: QuizQuestion[],
+  userAnswers: number[], score: number, weakAreas: string[]
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-  const { error } = await supabase.from('interview_qa').insert({ user_id: user.id, question, answer, topic, difficulty })
-  if (error) throw new Error(error.message)
-  revalidatePath('/career')
-}
-
-export async function updateQAAnswer(id: string, answer: string) {
-  const supabase = await createClient()
-  const { error } = await supabase.from('interview_qa').update({ answer }).eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/career')
-}
-
-export async function markQAReviewed(id: string) {
-  const supabase = await createClient()
-  const { error } = await supabase.from('interview_qa').update({ last_reviewed_at: new Date().toISOString() }).eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/career')
-}
-
-export async function deleteInterviewQA(id: string) {
-  const supabase = await createClient()
-  const { error } = await supabase.from('interview_qa').delete().eq('id', id)
+  if (!user) throw new Error('Not authenticated')
+  const { error } = await supabase.from('quiz_attempts').insert({
+    user_id: user.id, topic, difficulty, questions,
+    user_answers: userAnswers, score, total: questions.length, weak_areas: weakAreas,
+  })
   if (error) throw new Error(error.message)
   revalidatePath('/career')
 }

@@ -50,21 +50,41 @@ export interface Skill {
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
-export interface InterviewQA {
-  id: string
-  user_id: string
-  question: string
-  answer: string | null
-  topic: string
-  difficulty: Difficulty
-  created_at: string
-  last_reviewed_at: string | null
-}
-
 export const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string }> = {
   easy:   { label: 'Easy',   color: 'bg-green-500/15 text-green-400' },
   medium: { label: 'Medium', color: 'bg-amber-500/15 text-amber-400' },
   hard:   { label: 'Hard',   color: 'bg-red-500/15 text-red-400' },
 }
 
-export const QA_TOPICS = ['JavaScript', 'TypeScript', 'React', 'Angular', 'Node.js', 'Playwright', 'Testing', 'System Design', 'Behavioral', 'General'] as const
+export const QUIZ_TOPICS = ['JavaScript', 'React', 'TypeScript', 'Next.js', 'HTML/CSS', 'Browser Internals', 'Performance', 'System Design', 'Node.js', 'APIs'] as const
+
+export interface QuizQuestion {
+  question: string
+  options: string[]
+  correctIndex: number
+  explanation: string
+  subtopic: string
+}
+
+export interface QuizAttempt {
+  id: string
+  user_id: string
+  topic: string
+  difficulty: Difficulty
+  questions: QuizQuestion[]
+  user_answers: number[]
+  score: number
+  total: number
+  weak_areas: string[]
+  created_at: string
+}
+
+export type ReadinessTier = 'not_started' | 'needs_work' | 'developing' | 'ready' | 'strong'
+
+export const READINESS_CONFIG: Record<ReadinessTier, { label: string; color: string }> = {
+  not_started: { label: 'Not Started', color: 'bg-surface-3 text-slate-500' },
+  needs_work:  { label: 'Needs Work',  color: 'bg-red-500/15 text-red-400' },
+  developing:  { label: 'Developing',  color: 'bg-amber-500/15 text-amber-400' },
+  ready:       { label: 'Ready',       color: 'bg-blue-500/15 text-blue-400' },
+  strong:      { label: 'Strong',      color: 'bg-green-500/15 text-green-400' },
+}

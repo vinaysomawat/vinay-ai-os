@@ -1,22 +1,20 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
-import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, ChevronDown, Pencil, Check, Wand2, RotateCcw, Lightbulb, HelpCircle, Briefcase, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, X, Sparkles, ChevronRight, Pencil, Check, Briefcase, Eye, EyeOff, Brain } from 'lucide-react'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
-import FilterPill from '@/components/FilterPill'
 import { useAIAdvisor } from '@/components/AIAdvisorProvider'
 import { todayIST } from '@/lib/date'
 import {
   addApplication, updateStatus, deleteApplication, saveApplicationJD,
-  upsertCareerProfile,
-  addInterviewQA, updateQAAnswer, deleteInterviewQA, markQAReviewed,
+  upsertCareerProfile, saveQuizAttempt,
 } from '../actions'
-import { askCareerMentor, generateInterviewQuestions, analyzeJobDescription } from '@/features/ai/career-mentor'
-import { getQAsNeedingRevision } from '../calculations'
-import { SUGGESTED_QUESTIONS } from '../suggested-questions'
-import type { Application, AppStatus, CareerProfile, Skill, InterviewQA, Difficulty } from '../types'
-import { DIFFICULTY_CONFIG, QA_TOPICS } from '../types'
+import { askCareerMentor, analyzeJobDescription } from '@/features/ai/career-mentor'
+import { generateTopicQuiz } from '@/features/ai/quiz'
+import { gradeQuiz, computeReadiness, suggestNextTopic } from '../quiz-calculations'
+import type { Application, AppStatus, CareerProfile, Skill, QuizAttempt, QuizQuestion, Difficulty } from '../types'
+import { DIFFICULTY_CONFIG, QUIZ_TOPICS, READINESS_CONFIG } from '../types'
 import { useEscapeKey } from '@/lib/use-escape-key'
 import { useFormValidation } from '@/lib/use-form-validation'
 import FieldError from '@/components/FieldError'
@@ -89,57 +87,56 @@ function ProfileField({ label, value, onSave, type = 'text', placeholder, masked
   )
 }
 
+interface QuizSession {
+  topic: string
+  difficulty: Difficulty
+  stage: 'picking' | 'generating' | 'taking' | 'results'
+  questions: QuizQuestion[]
+  answers: number[]
+  score: number
+  weakAreas: string[]
+}
+
 interface Props {
   applications: Application[]
   profile: CareerProfile | null
   skills: Skill[]
-  qa: InterviewQA[]
+  quizAttempts: QuizAttempt[]
+  recommendedTopic: { topic: string; reason: string } | null
   codingStreak: number
   studyStreak: number
   goals: ResolvedGoal[]
 }
 
-export default function CareerView({ applications, profile, skills, qa, codingStreak, studyStreak, goals }: Props) {
+export default function CareerView({ applications, profile, skills, quizAttempts, recommendedTopic, codingStreak, studyStreak, goals }: Props) {
   const [, startTransition] = useTransition()
 
   const [localApps, setLocalApps] = useState(applications)
-  const [localQA, setLocalQA] = useState(qa)
   const [localProfile, setLocalProfile] = useState(profile)
+  const [localQuizAttempts, setLocalQuizAttempts] = useState(quizAttempts)
 
   const [filterStatus, setFilterStatus] = useState<AppStatus | 'all'>('all')
-  const [filterTopic, setFilterTopic] = useState<string>('all')
-  const [modal, setModal] = useState<'app' | 'qa' | 'generate' | null>(null)
+  const [modal, setModal] = useState<'app' | null>(null)
   useEscapeKey(() => setModal(null))
   const { invalidFields, validate, clear, onFieldInput } = useFormValidation()
   useEffect(() => clear(), [modal, clear])
-  const [expandedQA, setExpandedQA] = useState<string | null>(null)
-  const [editingAnswer, setEditingAnswer] = useState<string | null>(null)
-  const [answerInput, setAnswerInput] = useState('')
 
   // JD analysis
   const [expandedApp, setExpandedApp] = useState<string | null>(null)
   const [analyzingAppId, setAnalyzingAppId] = useState<string | null>(null)
   const [jdInput, setJdInput] = useState('')
 
+  // Quiz
+  const [quiz, setQuiz] = useState<QuizSession | null>(null)
+  useEscapeKey(() => setQuiz(null))
+
   // AI Mentor
   const [mentorQ, setMentorQ] = useState('')
   const [mentorA, setMentorA] = useState<string | null>(null)
   const [mentorLoading, setMentorLoading] = useState(false)
 
-  // AI Generate
-  const [genLoading, setGenLoading] = useState(false)
-
-  // Suggested questions
-  const [showSuggestedQuestions, setShowSuggestedQuestions] = useState(false)
-  const [addedSuggestedQuestions, setAddedSuggestedQuestions] = useState<Set<string>>(new Set())
-
   const counts = STATUSES.reduce((acc, s) => ({ ...acc, [s]: localApps.filter(a => a.status === s).length }), {} as Record<AppStatus, number>)
   const filtered = filterStatus === 'all' ? localApps : localApps.filter(a => a.status === filterStatus)
-  const filteredQA = filterTopic === 'all' ? localQA : localQA.filter(q => q.topic === filterTopic)
-  const needsRevisionQA = getQAsNeedingRevision(localQA)
-
-  const existingQuestions = new Set(localQA.map(q => q.question))
-  const suggestedQuestions = SUGGESTED_QUESTIONS.filter(s => !existingQuestions.has(s.question) && !addedSuggestedQuestions.has(s.question))
 
   const saveProfile = (field: keyof CareerProfile, raw: string) => {
     const value = ['current_salary', 'years_experience'].includes(field) ? (parseFloat(raw) || null) : raw
@@ -199,52 +196,47 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
     await saveApplicationJD(id, jd, analysis)
   }
 
-  const handleDeleteQA = (id: string) => {
-    setLocalQA(prev => prev.filter(q => q.id !== id))
-    startTransition(() => deleteInterviewQA(id))
-  }
-  const handleAddSuggestedQuestion = (s: typeof SUGGESTED_QUESTIONS[number]) => {
-    setAddedSuggestedQuestions(prev => new Set(prev).add(s.question))
-    const optimistic: InterviewQA = {
-      id: `temp-${Date.now()}`, user_id: '', question: s.question, answer: null,
-      topic: s.topic, difficulty: s.difficulty, created_at: new Date().toISOString(), last_reviewed_at: null,
-    }
-    setLocalQA(prev => [optimistic, ...prev])
-    startTransition(() => addInterviewQA(s.question, null, s.topic, s.difficulty))
-  }
-  const handleAnswerSave = (id: string) => {
-    setLocalQA(prev => prev.map(q => q.id === id ? { ...q, answer: answerInput } : q))
-    startTransition(() => updateQAAnswer(id, answerInput))
-    setEditingAnswer(null)
-  }
-  const handleMarkReviewed = (id: string) => {
-    const now = new Date().toISOString()
-    setLocalQA(prev => prev.map(q => q.id === id ? { ...q, last_reviewed_at: now } : q))
-    startTransition(() => markQAReviewed(id))
-  }
-
   const handleAsk = async () => {
     if (!mentorQ.trim() || mentorLoading) return
     setMentorLoading(true); setMentorA(null)
     try {
-      const answer = await askCareerMentor(mentorQ, { profile: localProfile, skills, applications: localApps, codingStreak, studyStreak })
+      const answer = await askCareerMentor(mentorQ, { profile: localProfile, skills, applications: localApps, quizAttempts: localQuizAttempts, codingStreak, studyStreak })
       setMentorA(answer)
     } finally { setMentorLoading(false) }
   }
 
-  const handleGenerate = async (topic: string, difficulty: string) => {
-    setGenLoading(true); setModal(null)
-    try {
-      const targetRole = localProfile?.target_role ?? 'Senior Frontend Engineer'
-      const questions = await generateInterviewQuestions(targetRole, topic, difficulty)
-      if (questions.length) {
-        const newQAs = questions.map(q => ({ id: `temp-${Date.now()}-${Math.random()}`, user_id: '', question: q.question, answer: q.answer, topic, difficulty: difficulty as Difficulty, created_at: new Date().toISOString(), last_reviewed_at: null }))
-        setLocalQA(prev => [...newQAs, ...prev])
-        for (const q of questions) {
-          await addInterviewQA(q.question, q.answer, topic, difficulty as Difficulty)
-        }
-      }
-    } finally { setGenLoading(false) }
+  const handleOpenQuiz = (topic: string) => setQuiz({ topic, difficulty: 'medium', stage: 'picking', questions: [], answers: [], score: 0, weakAreas: [] })
+  const handleCloseQuiz = () => setQuiz(null)
+
+  const handleGenerateQuiz = async () => {
+    if (!quiz) return
+    setQuiz(q => q ? { ...q, stage: 'generating' } : q)
+    const priorWeakAreas = [...new Set(localQuizAttempts.filter(a => a.topic === quiz.topic).flatMap(a => a.weak_areas))]
+    const questions = await generateTopicQuiz(quiz.topic, quiz.difficulty, priorWeakAreas)
+    if (questions.length === 0) { setQuiz(null); return }
+    setQuiz(q => q ? { ...q, stage: 'taking', questions, answers: new Array(questions.length).fill(-1) } : q)
+  }
+
+  const handleSelectAnswer = (qIndex: number, optIndex: number) => {
+    setQuiz(q => {
+      if (!q) return q
+      const answers = [...q.answers]
+      answers[qIndex] = optIndex
+      return { ...q, answers }
+    })
+  }
+
+  const handleSubmitQuiz = async () => {
+    if (!quiz) return
+    const { score, weakAreas } = gradeQuiz(quiz.questions, quiz.answers)
+    setQuiz(q => q ? { ...q, stage: 'results', score, weakAreas } : q)
+    const newAttempt: QuizAttempt = {
+      id: `temp-${Date.now()}`, user_id: '', topic: quiz.topic, difficulty: quiz.difficulty,
+      questions: quiz.questions, user_answers: quiz.answers, score, total: quiz.questions.length,
+      weak_areas: weakAreas, created_at: new Date().toISOString(),
+    }
+    setLocalQuizAttempts(prev => [newAttempt, ...prev])
+    await saveQuizAttempt(quiz.topic, quiz.difficulty, quiz.questions, quiz.answers, score, weakAreas)
   }
 
   const QUICK_PROMPTS = [
@@ -397,144 +389,35 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
         </Card>
       </div>
 
-      {/* Revision nudge — rule-based, not AI: Q&A not reviewed (or added) in 14+ days */}
-      {needsRevisionQA.length > 0 && (
-        <Card title="Needs Revision" action={<RotateCcw size={13} className="text-amber-400" />}>
-          <p className="text-xs text-slate-500 mb-3">Not reviewed in the last 14 days — worth a quick revisit before an interview.</p>
-          <ul className="space-y-1.5">
-            {needsRevisionQA.map(q => (
-              <li key={q.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
-                <p className="flex-1 text-sm text-slate-300 truncate">{q.question}</p>
-                <span className="text-xs text-slate-600 shrink-0">{q.topic}</span>
-                <button onClick={() => handleMarkReviewed(q.id)}
-                  className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-colors opacity-0 group-hover:opacity-100">
-                  ✓ Mark reviewed
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {/* Suggested questions — curated, not AI-generated (see suggested-questions.ts) */}
-      {suggestedQuestions.length > 0 && (
-        <div className="border border-surface-3 rounded-xl overflow-hidden">
-          <button onClick={() => setShowSuggestedQuestions(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-            <div className="flex items-center gap-2">
-              <Lightbulb size={14} className="text-amber-400" />
-              <span className="text-sm font-medium text-slate-300">Suggested Questions</span>
-              <span className="text-xs text-slate-600">{suggestedQuestions.length} curated Staff-level prep questions</span>
+      {/* Interview Prep — Interactive Topic Quiz */}
+      <Card title="Interview Prep">
+        {recommendedTopic && (
+          <div className="flex items-center gap-3 p-3 mb-4 rounded-lg bg-accent/10 border border-accent/30">
+            <Sparkles size={14} className="text-accent shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-slate-200">Recommended: <span className="font-medium text-accent">{recommendedTopic.topic}</span></p>
+              <p className="text-xs text-slate-500 mt-0.5">{recommendedTopic.reason}</p>
             </div>
-            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showSuggestedQuestions ? 'rotate-180' : ''}`} />
-          </button>
-          {showSuggestedQuestions && (
-            <div className="px-4 py-3 bg-surface-1 border-t border-surface-3">
-              {Object.entries(
-                suggestedQuestions.reduce<Record<string, typeof suggestedQuestions>>((acc, s) => {
-                  acc[s.topic] = [...(acc[s.topic] ?? []), s]
-                  return acc
-                }, {})
-              ).map(([topic, items]) => (
-                <div key={topic} className="mb-3 last:mb-0">
-                  <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5">{topic}</p>
-                  <ul className="space-y-1">
-                    {items.map(s => (
-                      <li key={s.question} className="flex items-center gap-2 py-1 group">
-                        <p className="flex-1 text-sm text-slate-300">{s.question}</p>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${DIFFICULTY_CONFIG[s.difficulty].color}`}>{DIFFICULTY_CONFIG[s.difficulty].label}</span>
-                        <button onClick={() => handleAddSuggestedQuestion(s)}
-                          className="shrink-0 text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
-                          + Add
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Interview Q&A Bank */}
-      <Card title={`Interview Q&A (${localQA.length})`} action={
-        <div className="flex items-center gap-2">
-          <button onClick={() => setModal('generate')} disabled={genLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-xs font-medium hover:bg-surface-3 disabled:opacity-50 transition-colors">
-            <Wand2 size={12} className="text-accent" /> {genLoading ? 'Generating...' : 'AI Generate'}
-          </button>
-          <button onClick={() => setModal('qa')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/80 transition-colors">
-            <Plus size={12} /> Add
-          </button>
-        </div>
-      }>
-        {/* Topic filter */}
-        <div className="flex gap-1.5 flex-wrap mb-4">
-          {['all', ...QA_TOPICS].map(t => (
-            <FilterPill key={t} label={t === 'all' ? 'All' : t} active={filterTopic === t} onClick={() => setFilterTopic(t)} />
-          ))}
-        </div>
-
-        {filteredQA.length === 0 ? (
-          <EmptyState icon={HelpCircle} message="No questions yet — add manually or use AI Generate" cta={{ label: 'Add', onClick: () => setModal('qa') }} />
-        ) : (
-          <ul className="space-y-2">
-            {filteredQA.map(item => {
-              const diff = DIFFICULTY_CONFIG[item.difficulty]
-              const isExpanded = expandedQA === item.id
-              const isEditingThis = editingAnswer === item.id
-              return (
-                <li key={item.id} className="border border-surface-3 rounded-lg overflow-hidden group">
-                  <div className="flex items-start gap-3 p-3 hover:bg-surface-2 transition-colors">
-                    <button onClick={() => setExpandedQA(isExpanded ? null : item.id)} aria-label={isExpanded ? 'Collapse answer' : 'Expand answer'} className="mt-0.5 text-slate-600 hover:text-slate-400 shrink-0">
-                      <ChevronRight size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-300">{item.question}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-xs text-slate-600">{item.topic}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${diff.color}`}>{diff.label}</span>
-                        {item.answer && <span className="text-xs text-green-500/70">✓ answered</span>}
-                      </div>
-                    </div>
-                    <button onClick={() => handleDeleteQA(item.id)} aria-label="Delete question" className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all shrink-0">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                  {isExpanded && (
-                    <div className="px-4 pb-3 border-t border-surface-3 bg-surface-2/50">
-                      {isEditingThis ? (
-                        <div className="pt-3 space-y-2">
-                          <textarea value={answerInput} onChange={e => setAnswerInput(e.target.value)} rows={4} autoFocus
-                            className="w-full bg-surface-2 border border-accent rounded-lg px-3 py-2 text-sm text-slate-200 outline-none resize-none" />
-                          <div className="flex gap-2">
-                            <button onClick={() => handleAnswerSave(item.id)} className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs">Save</button>
-                            <button onClick={() => setEditingAnswer(null)} className="px-3 py-1.5 rounded-lg bg-surface-2 text-slate-400 text-xs">Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pt-3">
-                          {item.answer ? (
-                            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{item.answer}</p>
-                          ) : (
-                            <p className="text-sm text-slate-600 italic">No answer yet</p>
-                          )}
-                          <div className="mt-2 flex items-center gap-3">
-                            <button onClick={() => { setEditingAnswer(item.id); setAnswerInput(item.answer ?? '') }} className="text-xs text-accent hover:underline flex items-center gap-1">
-                              <Pencil size={10} /> {item.answer ? 'Edit answer' : 'Add answer'}
-                            </button>
-                            <button onClick={() => handleMarkReviewed(item.id)} className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1">
-                              <Check size={10} /> Mark reviewed
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+            <button onClick={() => handleOpenQuiz(recommendedTopic.topic)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-accent text-white font-medium hover:bg-accent/80 transition-colors">
+              Start Quiz
+            </button>
+          </div>
         )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {QUIZ_TOPICS.map(topic => {
+            const { tier, avgPercent } = computeReadiness(localQuizAttempts, topic)
+            const lastAttempt = localQuizAttempts.filter(a => a.topic === topic).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+            const rcfg = READINESS_CONFIG[tier]
+            return (
+              <button key={topic} onClick={() => handleOpenQuiz(topic)}
+                className="flex flex-col items-start p-3 rounded-lg border border-surface-3 bg-surface-2 hover:bg-surface-3 transition-colors text-left">
+                <span className="text-sm font-medium text-slate-200">{topic}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium mt-1.5 ${rcfg.color}`}>{rcfg.label}{avgPercent !== null ? ` · ${avgPercent}%` : ''}</span>
+                {lastAttempt && <span className="text-xs text-slate-600 mt-1">Last: {lastAttempt.score}/{lastAttempt.total}</span>}
+              </button>
+            )
+          })}
+        </div>
       </Card>
 
       {/* Career Profile */}
@@ -559,153 +442,166 @@ export default function CareerView({ applications, profile, skills, qa, codingSt
 
       <GoalsCard module="career" initialGoals={goals} />
 
-      {/* Modals */}
-      {modal && (
+      {/* Quiz modal */}
+      {quiz && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2"><Brain size={16} className="text-accent" /> {quiz.topic} Quiz</h2>
+              <button onClick={handleCloseQuiz} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
+            </div>
+
+            {quiz.stage === 'picking' && (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-400">Generate a 10-question quiz on <span className="text-accent font-medium">{quiz.topic}</span>.</p>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Difficulty</label>
+                  <select value={quiz.difficulty} onChange={e => setQuiz(q => q ? { ...q, difficulty: e.target.value as Difficulty } : q)}
+                    className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                    {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => <option key={d} value={d}>{DIFFICULTY_CONFIG[d].label}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={handleCloseQuiz} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                  <button onClick={handleGenerateQuiz} className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Generate Quiz</button>
+                </div>
+              </div>
+            )}
+
+            {quiz.stage === 'generating' && (
+              <div className="space-y-2 py-4">{[90, 70, 85, 60, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>
+            )}
+
+            {quiz.stage === 'taking' && (
+              <div className="space-y-4">
+                {quiz.questions.map((q, qi) => (
+                  <div key={qi} className="space-y-1.5">
+                    <p className="text-sm text-slate-200">{qi + 1}. {q.question}</p>
+                    <div className="space-y-1">
+                      {q.options.map((opt, oi) => (
+                        <label key={oi} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-sm transition-colors ${quiz.answers[qi] === oi ? 'border-accent bg-accent/10 text-slate-200' : 'border-surface-3 text-slate-400 hover:bg-surface-2'}`}>
+                          <input type="radio" name={`q${qi}`} checked={quiz.answers[qi] === oi} onChange={() => handleSelectAnswer(qi, oi)} className="accent-accent shrink-0" />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={handleCloseQuiz} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                  <button onClick={handleSubmitQuiz} disabled={quiz.answers.includes(-1)}
+                    className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 disabled:opacity-50 transition">
+                    Submit Quiz
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {quiz.stage === 'results' && (() => {
+              const nextTopic = suggestNextTopic(localQuizAttempts, QUIZ_TOPICS)
+              const wrongQuestions = quiz.questions.filter((q, qi) => quiz.answers[qi] !== q.correctIndex)
+              return (
+                <div className="space-y-4">
+                  <div className="text-center py-2">
+                    <p className="text-3xl font-bold text-slate-100">{quiz.score}/{quiz.questions.length}</p>
+                  </div>
+                  {quiz.weakAreas.length > 0 && (
+                    <div>
+                      <p className="text-xs text-slate-600 uppercase tracking-wider mb-1">Weak Areas</p>
+                      <div className="flex flex-wrap gap-1">{quiz.weakAreas.map(w => <span key={w} className="text-xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">{w}</span>)}</div>
+                    </div>
+                  )}
+                  {wrongQuestions.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-600 uppercase tracking-wider">Incorrect Answers</p>
+                      {quiz.questions.map((q, qi) => quiz.answers[qi] !== q.correctIndex && (
+                        <div key={qi} className="p-2.5 rounded-lg bg-surface-2 border border-surface-3">
+                          <p className="text-sm text-slate-300">{q.question}</p>
+                          <p className="text-xs text-red-400 mt-1">Your answer: {q.options[quiz.answers[qi]]}</p>
+                          <p className="text-xs text-green-400 mt-0.5">Correct: {q.options[q.correctIndex]}</p>
+                          <p className="text-xs text-slate-500 mt-1">{q.explanation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-green-400 text-center">Perfect score — no incorrect answers.</p>
+                  )}
+                  <p className="text-xs text-slate-500">Next up: <span className="text-accent font-medium">{nextTopic}</span></p>
+                  <button onClick={handleCloseQuiz} className="w-full py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Close</button>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Add Application modal */}
+      {modal === 'app' && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-surface-1 border border-surface-3 rounded-xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-slate-200">
-                {modal === 'app' ? 'Add Application' : modal === 'qa' ? 'Add Question' : 'Generate Interview Questions'}
-              </h2>
+              <h2 className="text-base font-semibold text-slate-200">Add Application</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="p-1.5 -m-1.5 text-slate-500 hover:text-slate-300"><X size={16} /></button>
             </div>
 
-            {modal === 'qa' && (
-              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
-                e.preventDefault()
-                if (!validate(e.currentTarget)) return
-                const fd = new FormData(e.currentTarget)
-                const question = fd.get('question') as string
-                const answer = fd.get('answer') as string || null
-                const topic = fd.get('topic') as string
-                const difficulty = fd.get('difficulty') as Difficulty
-                const newQA: InterviewQA = { id: `temp-${Date.now()}`, user_id: '', question, answer, topic, difficulty, created_at: new Date().toISOString(), last_reviewed_at: null }
-                setLocalQA(prev => [newQA, ...prev])
-                setModal(null)
-                await addInterviewQA(question, answer, topic, difficulty)
-              }}>
+            <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
+              e.preventDefault()
+              if (!validate(e.currentTarget)) return
+              const fd = new FormData(e.currentTarget)
+              await handleAddApplication(fd)
+            }}>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Question</label>
-                  <textarea name="question" required autoFocus rows={3} placeholder="What is the difference between..." className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none ${invalidFields.has('question') ? 'border-red-500' : 'border-surface-3'}`} />
-                  <FieldError show={invalidFields.has('question')} />
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Company *</label>
+                  <input name="company" required autoFocus placeholder="Google" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('company') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('company')} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Answer (optional — add later)</label>
-                  <textarea name="answer" rows={3} placeholder="Your answer..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Role *</label>
+                  <input name="role" required placeholder="Senior Engineer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('role') ? 'border-red-500' : 'border-surface-3'}`} />
+                  <FieldError show={invalidFields.has('role')} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Topic</label>
-                    <select name="topic" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
-                      {QA_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Difficulty</label>
-                    <select name="difficulty" defaultValue="medium" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
-                      {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => <option key={d} value={d}>{DIFFICULTY_CONFIG[d].label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add</button>
-                </div>
-              </form>
-            )}
-
-            {modal === 'generate' && (
-              <form className="space-y-3" onSubmit={async e => {
-                e.preventDefault()
-                const fd = new FormData(e.currentTarget)
-                await handleGenerate(fd.get('topic') as string, fd.get('difficulty') as string)
-              }}>
-                <p className="text-sm text-slate-400">Generate 5 interview questions for <span className="text-accent font-medium">{localProfile?.target_role ?? 'your target role'}</span> using AI.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Topic</label>
-                    <select name="topic" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
-                      {QA_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Difficulty</label>
-                    <select name="difficulty" defaultValue="medium" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition flex items-center justify-center gap-1.5">
-                    <Wand2 size={12} /> Generate 5 Questions
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {modal === 'app' && (
-              <form className="space-y-3" noValidate onInput={onFieldInput} onSubmit={async e => {
-                e.preventDefault()
-                if (!validate(e.currentTarget)) return
-                const fd = new FormData(e.currentTarget)
-                await handleAddApplication(fd)
-              }}>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Company *</label>
-                    <input name="company" required autoFocus placeholder="Google" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('company') ? 'border-red-500' : 'border-surface-3'}`} />
-                    <FieldError show={invalidFields.has('company')} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Role *</label>
-                    <input name="role" required placeholder="Senior Engineer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('role') ? 'border-red-500' : 'border-surface-3'}`} />
-                    <FieldError show={invalidFields.has('role')} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Status</label>
-                    <select name="status" defaultValue="applied" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
-                      {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Applied On</label>
-                    <input name="applied_at" type="date" defaultValue={todayIST()} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Location</label>
-                    <input name="location" placeholder="Remote / Bangalore" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500 uppercase tracking-wider">Salary Range</label>
-                    <input name="salary_range" placeholder="₹40–60 LPA" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
-                  </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Status</label>
+                  <select name="status" defaultValue="applied" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                    {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+                  </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Job URL</label>
-                  <input name="url" type="url" placeholder="https://..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Applied On</label>
+                  <input name="applied_at" type="date" defaultValue={todayIST()} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Location</label>
+                  <input name="location" placeholder="Remote / Bangalore" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Job Description *</label>
-                  <textarea name="job_description" required rows={5} placeholder="Paste the full job description — used to auto-analyze required skills, match %, and prep topics" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none ${invalidFields.has('job_description') ? 'border-red-500' : 'border-surface-3'}`} />
-                  <FieldError show={invalidFields.has('job_description')} />
+                  <label className="text-xs text-slate-500 uppercase tracking-wider">Salary Range</label>
+                  <input name="salary_range" placeholder="₹40–60 LPA" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500 uppercase tracking-wider">Notes</label>
-                  <textarea name="notes" rows={2} placeholder="Referral from X, interesting stack..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Application</button>
-                </div>
-              </form>
-            )}
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Job URL</label>
+                <input name="url" type="url" placeholder="https://..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Job Description *</label>
+                <textarea name="job_description" required rows={5} placeholder="Paste the full job description — used to auto-analyze required skills, match %, and prep topics" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none ${invalidFields.has('job_description') ? 'border-red-500' : 'border-surface-3'}`} />
+                <FieldError show={invalidFields.has('job_description')} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Notes</label>
+                <textarea name="notes" rows={2} placeholder="Referral from X, interesting stack..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setModal(null)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 active:scale-95 transition">Add Application</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -23,7 +23,7 @@ export async function gatherTodayActivityLines(db: SupabaseClient, userId: strin
 
   const [
     codingRes, trendingRes, studyRes, metricRes,
-    workoutsRes, expensesRes, qaRes, appsRes,
+    workoutsRes, expensesRes, quizRes, appsRes,
   ] = await Promise.all([
     db.from('coding_daily_questions').select('completed').eq('user_id', userId).eq('assigned_date', today),
     db.from('trending_readings').select('completed, title').eq('user_id', userId).eq('assigned_date', today),
@@ -31,7 +31,7 @@ export async function gatherTodayActivityLines(db: SupabaseClient, userId: strin
     db.from('health_metrics').select('weight_kg, calories, protein_g, steps').eq('user_id', userId).eq('date', today).maybeSingle(),
     db.from('workouts').select('type, duration_minutes').eq('user_id', userId).eq('date', today),
     db.from('expenses').select('amount, category').eq('user_id', userId).eq('date', today),
-    db.from('interview_qa').select('topic').eq('user_id', userId).gte('last_reviewed_at', istMidnightUtc()),
+    db.from('quiz_attempts').select('topic, score, total').eq('user_id', userId).gte('created_at', istMidnightUtc()),
     db.from('applications').select('company, role').eq('user_id', userId).eq('applied_at', today),
   ])
 
@@ -65,8 +65,8 @@ export async function gatherTodayActivityLines(db: SupabaseClient, userId: strin
     lines.push(`Spent ₹${Math.round(total).toLocaleString('en-IN')} across ${expenses.length} expense${expenses.length > 1 ? 's' : ''}`)
   }
 
-  const qas = qaRes.data ?? []
-  if (qas.length > 0) lines.push(`Reviewed ${qas.length} interview Q&A${qas.length > 1 ? 's' : ''}`)
+  const quizzes = quizRes.data ?? []
+  if (quizzes.length > 0) lines.push(`Took ${quizzes.length} interview prep quiz${quizzes.length > 1 ? 'zes' : ''}: ${quizzes.map(q => `${q.topic} (${q.score}/${q.total})`).join(', ')}`)
 
   const apps = appsRes.data ?? []
   if (apps.length > 0) lines.push(`Submitted ${apps.length} new application${apps.length > 1 ? 's' : ''}: ${apps.map(a => `${a.company} (${a.role})`).join(', ')}`)
