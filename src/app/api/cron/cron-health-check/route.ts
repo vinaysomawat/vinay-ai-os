@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getCronJobHealth } from '@/lib/cron-log'
+import { getCronJobHealth, logCronRun } from '@/lib/cron-log'
 import { sendMessage } from '@/lib/telegram/send'
 
 const CHAT_ID   = process.env.TELEGRAM_ALLOWED_CHAT_ID!
@@ -15,6 +15,11 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN_PLANNER!
 // being correct elsewhere, since a broken secret here would just mean this
 // job also silently 401s, which is a smaller, self-contained failure mode
 // than the one it's meant to catch.
+//
+// This route used to be the one exception that never logged its own run —
+// invisible to the very monitoring system it implements. It now logs itself
+// too (and is in EXPECTED_CRON_JOBS), so a future run can notice if a past
+// one silently stopped firing.
 export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -22,6 +27,7 @@ export async function GET(req: Request) {
   }
 
   const supabase = createServiceClient()
+  await logCronRun(supabase, 'cron-health-check')
   const health = await getCronJobHealth(supabase)
   const stale = health.filter(h => h.status === 'stale').map(h => h.job)
   const neverSeen = health.filter(h => h.status === 'never-seen').map(h => h.job)
