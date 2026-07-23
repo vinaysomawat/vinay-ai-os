@@ -25,7 +25,7 @@ export default function DailyWorkoutCard({ initialWorkout, stats }: Props) {
 
   if (!workout) {
     return (
-      <div className="bg-surface-1 border border-surface-3 rounded-xl p-5">
+      <div className="bg-surface-1 border border-surface-3 rounded-xl p-3.5">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Today&apos;s Workout</h2>
         <EmptyState icon={Dumbbell} message="No workout library found yet — run the pending migration to get started." />
       </div>
@@ -57,8 +57,8 @@ export default function DailyWorkoutCard({ initialWorkout, stats }: Props) {
   const isDone = workout.status === 'completed' || workout.status === 'skipped'
 
   return (
-    <div className="bg-surface-1 border border-surface-3 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-surface-1 border border-surface-3 rounded-xl p-3.5">
+      <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Today&apos;s Workout</h2>
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1 text-amber-400"><Flame size={12} /> {stats.currentStreakDays}d streak</span>

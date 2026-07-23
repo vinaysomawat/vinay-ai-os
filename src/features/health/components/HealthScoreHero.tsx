@@ -7,7 +7,7 @@ function MiniRing({ score, color }: { score: number; color: string }) {
   const r = 20, circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
   return (
-    <svg width="48" height="48" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
+    <svg width="40" height="40" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
       <circle cx="24" cy="24" r={r} fill="none" stroke="#26263a" strokeWidth="5" />
       <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="5"
         strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`} strokeLinecap="round" />
@@ -34,15 +34,15 @@ export default function HealthScoreHero({ score, onEditProfile }: { score: Healt
     score.overall >= 40 ? 'text-amber-400' : 'text-red-400'
 
   return (
-    <div className="bg-surface-1 border border-surface-3 rounded-xl p-5 relative">
+    <div className="bg-surface-1 border border-surface-3 rounded-xl p-3.5 relative">
       {onEditProfile && (
         <button onClick={onEditProfile} className="absolute top-3 right-3 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <Settings2 size={12} /> Edit health profile
         </button>
       )}
-      <div className="flex flex-col sm:flex-row items-center gap-6">
+      <div className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative shrink-0">
-          <svg viewBox="0 0 120 120" className="w-28 h-28" style={{ transform: 'rotate(-90deg)' }}>
+          <svg viewBox="0 0 120 120" className="w-24 h-24" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="60" cy="60" r={r} fill="none" stroke="#26263a" strokeWidth="8" />
             <circle cx="60" cy="60" r={r} fill="none" stroke="url(#healthGrad)" strokeWidth="8"
               strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`} strokeLinecap="round" />
@@ -60,8 +60,8 @@ export default function HealthScoreHero({ score, onEditProfile }: { score: Healt
         </div>
 
         <div className="flex-1 w-full">
-          <p className={`text-sm font-bold mb-3 ${levelColor}`}>{level}</p>
-          <div className="flex flex-wrap gap-6">
+          <p className={`text-sm font-bold mb-2 ${levelColor}`}>{level}</p>
+          <div className="flex flex-wrap gap-3">
             {SUB_SCORES.map(({ key, label, color }) => {
               const s = score[key]
               return (

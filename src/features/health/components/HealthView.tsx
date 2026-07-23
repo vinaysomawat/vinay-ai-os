@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useOptimistic, useTransition } from 'react'
+import dynamic from 'next/dynamic'
 import { Plus, Trash2, Sparkles, Settings2, Dumbbell } from 'lucide-react'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
@@ -12,10 +13,16 @@ import { computeHealthPlan } from '../calculations'
 import { daysAgoIST } from '@/lib/date'
 import HealthProfileForm from './HealthProfileForm'
 import HealthScoreHero from './HealthScoreHero'
-import TodaysPlanCard from './TodaysPlanCard'
 import DailyWorkoutCard from './DailyWorkoutCard'
 import type { HealthMetric, MetricField, HealthProfile, Workout } from '../types'
 import type { DailyWorkout, WorkoutStats } from '../workout-core'
+
+// recharts is a ~100KB client-only dependency used nowhere else on this
+// page — code-split it out of the initial bundle rather than block paint.
+const HealthTrend = dynamic(() => import('./HealthTrend'), {
+  ssr: false,
+  loading: () => <div className="h-[16.5rem] bg-surface-1 border border-surface-3 rounded-xl animate-pulse" />,
+})
 
 const METRICS: { field: MetricField; label: string; emoji: string; unit: string; decimals?: number }[] = [
   { field: 'weight_kg',      label: 'Weight',   emoji: '⚖️',  unit: 'kg',   decimals: 1 },
@@ -202,9 +209,6 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
   return (
     <div className="space-y-4">
       {advisorPortal}
-      {profile && dailyTargets && healthScore && (
-        <TodaysPlanCard profile={profile} plan={dailyTargets} todayMetric={todayMetric} score={healthScore} today={today} />
-      )}
 
       <DailyWorkoutCard initialWorkout={initialDailyWorkout} stats={workoutStats} />
 
@@ -240,6 +244,8 @@ export default function HealthView({ initialMetrics, initialProfile, initialWork
       {profile && dailyTargets && healthScore && (
         <HealthScoreHero score={healthScore} onEditProfile={() => setShowProfileForm(true)} />
       )}
+
+      <HealthTrend metrics={metrics} />
 
       {/* Stats — current weight/workouts always shown, targets/BMI added once a plan can be computed */}
       <div className="bg-surface-1 border border-surface-3 rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
