@@ -2,7 +2,7 @@
 
 import { askAI } from '@/lib/ai-gateway'
 import { todayIST } from '@/lib/date'
-import type { Resource, StudyLog } from '@/features/learning/types'
+import type { Resource, StudyLog, RecommendedResource } from '@/features/learning/types'
 
 export async function getDailyStudyPlan(resources: Resource[], recentLogs: StudyLog[]): Promise<string> {
   const inProgress = resources.filter(r => r.status === 'in-progress')
@@ -36,6 +36,43 @@ Create a focused study plan for today. Include:
 Be specific — reference actual resource names and chapters/topics. Keep it under 150 words.`
 
   return askAI('study_plan', prompt, "You are Vinay's personal study coach. Create sharp, specific daily plans. Reference his actual resources by name.")
+}
+
+export async function recommendResources(resources: Resource[], excludeTitles: string[]): Promise<RecommendedResource[]> {
+  const inProgress = resources.filter(r => r.status === 'in-progress')
+  const completed = resources.filter(r => r.status === 'completed')
+  const categories = [...new Set(resources.map(r => r.category))]
+
+  const prompt = `Vinay is a frontend engineer targeting senior/staff-level roles. His current learning:
+
+Categories he's studying: ${categories.join(', ') || 'none yet'}
+In progress (${inProgress.length}): ${inProgress.map(r => `${r.title} (${r.category})`).join(', ') || 'none'}
+Completed (${completed.length}): ${completed.map(r => r.title).join(', ') || 'none'}
+
+Already suggested or in his list — do NOT recommend any of these again: ${excludeTitles.join(', ') || 'none'}
+
+Recommend 5 learning resources he should study next. Base this on:
+1. His actual progress above — fill real gaps, don't repeat what he already knows or is doing.
+2. Your knowledge of current frontend interview trends and what's frequently asked at top product companies right now.
+3. Recent frontend/JS ecosystem developments worth knowing.
+
+Order them by priority — the most important one first, with the reason explaining why it matters right now (interview relevance, ecosystem shift, or gap in his current progress).
+
+Return ONLY a JSON array in this exact format:
+[
+  {"title": "...", "type": "course"|"book"|"video"|"article"|"podcast", "category": "...", "reason": "..."},
+  ...
+]
+
+Do NOT include a "url" field — specific links aren't reliable from you. title should name a real, well-known resource (a specific book, a well-known course platform's course, a commonly-cited article/talk) by its actual name, not a generic placeholder — but never fabricate a URL for it.`
+
+  const raw = await askAI('recommend_resources', prompt, 'You are a sharp technical mentor who stays current on frontend interview trends and the JS ecosystem. Return only valid JSON, no explanation, no markdown fences. Never invent a URL.')
+  try {
+    const match = raw.match(/\[[\s\S]*\]/)
+    return match ? JSON.parse(match[0]) : []
+  } catch {
+    return []
+  }
 }
 
 export async function generateResourceQuiz(title: string, category: string, type: string, notes: string | null): Promise<{ question: string; answer: string }[]> {

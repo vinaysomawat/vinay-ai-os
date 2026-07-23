@@ -17,6 +17,18 @@ export interface Resource {
   task_id: string | null
 }
 
+// AI-recommended resource — deliberately has no `url`. Suggested-resources.ts's
+// curated list is hand-verified (each URL checked live); an AI-generated URL
+// risks looking plausible while being fake. The UI opens the existing Add
+// Resource form pre-filled with this data instead of inserting it directly,
+// so a real URL always comes from the user, never the model.
+export interface RecommendedResource {
+  title: string
+  type: ResourceType
+  category: string
+  reason: string
+}
+
 export interface StudyLog {
   id: string
   user_id: string

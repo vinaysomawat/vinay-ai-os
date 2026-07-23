@@ -9,16 +9,14 @@ import FilterPill from '@/components/FilterPill'
 import ModuleRecommendations from '@/components/ModuleRecommendations'
 import { useAIAdvisor, useAIAdvisorOpen } from '@/components/AIAdvisorProvider'
 import { addResource, updateResource, deleteResource, logStudySession } from '../actions'
-import { getDailyStudyPlan, generateResourceQuiz } from '@/features/ai/study-plan'
+import { getDailyStudyPlan, generateResourceQuiz, recommendResources } from '@/features/ai/study-plan'
 import { getResourcesNeedingRevision, getStudyStreak } from '../calculations'
 import { SUGGESTED_RESOURCES } from '../suggested-resources'
 import { todayIST, daysAgoIST } from '@/lib/date'
 import { useEscapeKey } from '@/lib/use-escape-key'
 import { useFormValidation } from '@/lib/use-form-validation'
 import FieldError from '@/components/FieldError'
-import GoalsCard from '@/features/goals/components/GoalsCard'
-import type { ResolvedGoal } from '@/features/goals/types'
-import type { Resource, ResourceStatus, ResourceType, StudyLog } from '../types'
+import type { Resource, ResourceStatus, ResourceType, StudyLog, RecommendedResource } from '../types'
 
 const TYPE_ICON: Record<ResourceType, string> = {
   course: '🎓', book: '📚', video: '🎬', article: '📄', podcast: '🎙️',
@@ -75,10 +73,9 @@ interface QuizItem { question: string; answer: string }
 interface Props {
   initialResources: Resource[]
   initialStudyLogs: StudyLog[]
-  goals: ResolvedGoal[]
 }
 
-export default function LearningView({ initialResources, initialStudyLogs, goals }: Props) {
+export default function LearningView({ initialResources, initialStudyLogs }: Props) {
   const [, startTransition] = useTransition()
   const [resources, setResources] = useState(initialResources)
   const [studyLogs, setStudyLogs] = useState(initialStudyLogs)
@@ -98,6 +95,14 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
   // Suggested resources
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [addedSuggestionUrls, setAddedSuggestionUrls] = useState<Set<string>>(new Set())
+  const [dismissedCuratedUrls, setDismissedCuratedUrls] = useState<Set<string>>(new Set())
+
+  // AI-recommended resources — no url (see RecommendedResource), so "+ Add"
+  // opens the Add Resource form pre-filled instead of inserting directly.
+  const [aiSuggestions, setAiSuggestions] = useState<RecommendedResource[]>([])
+  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false)
+  const [handledAiTitles, setHandledAiTitles] = useState<Set<string>>(new Set())
+  const [prefill, setPrefill] = useState<{ title: string; type: ResourceType; category: string; notes: string } | null>(null)
 
   useEscapeKey(() => {
     if (showForm) setShowForm(false)
@@ -105,7 +110,7 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
     if (quizResource) setQuizResource(null)
   })
   const { invalidFields, validate, clear, onFieldInput } = useFormValidation()
-  useEffect(() => clear(), [showForm, clear])
+  useEffect(() => { clear(); if (!showForm) setPrefill(null) }, [showForm, clear])
 
   const today = todayIST()
   const streak = getStudyStreak(studyLogs)
@@ -125,7 +130,8 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
   const categoryEntries = Object.entries(byCategory).sort((a, b) => b[1] - a[1])
 
   const existingUrls = new Set(resources.map(r => r.url).filter(Boolean))
-  const suggestions = SUGGESTED_RESOURCES.filter(s => !existingUrls.has(s.url) && !addedSuggestionUrls.has(s.url))
+  const suggestions = SUGGESTED_RESOURCES.filter(s => !existingUrls.has(s.url) && !addedSuggestionUrls.has(s.url) && !dismissedCuratedUrls.has(s.url))
+  const visibleAiSuggestions = aiSuggestions.filter(s => !handledAiTitles.has(s.title))
 
   const handleStatus = (id: string, status: ResourceStatus) => {
     setResources(prev => prev.map(r => r.id === id ? { ...r, status, progress: status === 'completed' ? 100 : r.progress } : r))
@@ -153,6 +159,33 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
     fd.set('title', s.title); fd.set('type', s.type); fd.set('url', s.url); fd.set('category', s.category); fd.set('notes', s.notes)
     startTransition(() => addResource(fd))
   }
+
+  const handleDismissCurated = (url: string) => setDismissedCuratedUrls(prev => new Set(prev).add(url))
+
+  const handleAddMoreResources = async () => {
+    setAiSuggestionsLoading(true)
+    try {
+      const excludeTitles = [
+        ...resources.map(r => r.title),
+        ...aiSuggestions.map(r => r.title),
+      ]
+      const recs = await recommendResources(resources, excludeTitles)
+      setAiSuggestions(prev => [...prev, ...recs])
+    } finally {
+      setAiSuggestionsLoading(false)
+    }
+  }
+
+  // AI suggestions never carry a URL — open the Add Resource form pre-filled
+  // instead of inserting directly, so the user supplies (or skips) a real link.
+  // Only marked "handled" on actual submit (see the form below), not on open,
+  // so cancelling the modal leaves the suggestion available to add later.
+  const handleAddAiSuggestion = (s: RecommendedResource) => {
+    setPrefill({ title: s.title, type: s.type, category: s.category, notes: s.reason })
+    setShowForm(true)
+  }
+
+  const handleDismissAiSuggestion = (title: string) => setHandledAiTitles(prev => new Set(prev).add(title))
 
   const handleLogSession = async (resource: Resource | null) => {
     const duration = parseInt(logDuration) || 30
@@ -191,16 +224,15 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
         <StatCard value={streak} label={`${weekMinutes}m this week`} valueClassName="text-amber-400" icon={<Flame size={16} className="text-amber-400" />} />
       </div>
 
-      <GoalsCard module="learning" initialGoals={goals} autoMetric="books_completed" />
-
       {/* Revision nudge — rule-based, not AI: completed resources with no study activity in 14+ days */}
       {needsRevision.length > 0 && (
-        <Card title="Needs Revision" action={<RotateCcw size={13} className="text-amber-400" />}>
-          <p className="text-xs text-slate-500 mb-3">Completed, but no study activity in the last 14 days — worth a quick revisit.</p>
-          <ul className="space-y-1.5">
+        <Card title="Needs Revision" padding="p-3.5" action={
+          <span className="text-xs text-slate-500 flex items-center gap-1"><RotateCcw size={11} className="text-amber-400" /> 14+ days idle</span>
+        }>
+          <ul className="space-y-1">
             {needsRevision.map(r => (
-              <li key={r.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-2 transition-colors group">
-                <span className="text-lg shrink-0">{TYPE_ICON[r.type]}</span>
+              <li key={r.id} className="flex items-center gap-2 py-1 px-1.5 -mx-1.5 rounded-lg hover:bg-surface-2 transition-colors group">
+                <span className="text-sm shrink-0">{TYPE_ICON[r.type]}</span>
                 <p className="flex-1 text-sm text-slate-300 truncate">{r.title}</p>
                 <button onClick={() => setShowLog(r)}
                   className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-colors opacity-0 group-hover:opacity-100">
@@ -212,50 +244,96 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
         </Card>
       )}
 
-      {/* Suggested resources — curated, hand-verified, not AI-generated (see suggested-resources.ts) */}
-      {suggestions.length > 0 && (
-        <div className="border border-surface-3 rounded-xl overflow-hidden">
-          <button onClick={() => setShowSuggestions(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
-            <div className="flex items-center gap-2">
-              <Lightbulb size={14} className="text-amber-400" />
-              <span className="text-sm font-medium text-slate-300">Suggested Resources</span>
-              <span className="text-xs text-slate-600">{suggestions.length} curated frontend picks</span>
-            </div>
-            <ChevronDown size={14} className={`text-slate-500 transition-transform ${showSuggestions ? 'rotate-180' : ''}`} />
-          </button>
-          {showSuggestions && (
-            <div className="px-4 py-3 bg-surface-1 border-t border-surface-3">
-              {Object.entries(
-                suggestions.reduce<Record<string, typeof suggestions>>((acc, s) => {
-                  acc[s.category] = [...(acc[s.category] ?? []), s]
-                  return acc
-                }, {})
-              ).map(([category, items]) => (
-                <div key={category} className="mb-3 last:mb-0">
-                  <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5">{category}</p>
-                  <ul className="space-y-1">
-                    {items.map(s => (
-                      <li key={s.url} className="flex items-start gap-2 py-1 group">
-                        <span className="text-base shrink-0">{TYPE_ICON[s.type]}</span>
-                        <div className="flex-1 min-w-0">
-                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-300 hover:text-accent transition-colors">
-                            {s.title}
-                          </a>
-                          <p className="text-xs text-slate-600 mt-0.5">{s.notes}</p>
-                        </div>
+      {/* Suggested resources — curated (hand-verified URLs, not AI-generated)
+          plus an on-demand AI-recommended section (no URLs — see RecommendedResource). */}
+      <div className="border border-surface-3 rounded-xl overflow-hidden">
+        <button onClick={() => setShowSuggestions(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-surface-1 hover:bg-surface-2 transition-colors">
+          <div className="flex items-center gap-2">
+            <Lightbulb size={14} className="text-amber-400" />
+            <span className="text-sm font-medium text-slate-300">Suggested Resources</span>
+            <span className="text-xs text-slate-600">{suggestions.length + visibleAiSuggestions.length} picks</span>
+          </div>
+          <ChevronDown size={14} className={`text-slate-500 transition-transform ${showSuggestions ? 'rotate-180' : ''}`} />
+        </button>
+        {showSuggestions && (
+          <div className="px-4 py-3 bg-surface-1 border-t border-surface-3">
+            {suggestions.length === 0 && visibleAiSuggestions.length === 0 && !aiSuggestionsLoading && (
+              <p className="text-xs text-slate-600 mb-3">No curated picks left — try AI Suggested for more.</p>
+            )}
+            {Object.entries(
+              suggestions.reduce<Record<string, typeof suggestions>>((acc, s) => {
+                acc[s.category] = [...(acc[s.category] ?? []), s]
+                return acc
+              }, {})
+            ).map(([category, items]) => (
+              <div key={category} className="mb-3 last:mb-0">
+                <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5">{category}</p>
+                <ul className="space-y-1">
+                  {items.map(s => (
+                    <li key={s.url} className="flex items-start gap-2 py-1 group">
+                      <span className="text-base shrink-0">{TYPE_ICON[s.type]}</span>
+                      <div className="flex-1 min-w-0">
+                        <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-300 hover:text-accent transition-colors">
+                          {s.title}
+                        </a>
+                        <p className="text-xs text-slate-600 mt-0.5">{s.notes}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1">
                         <button onClick={() => handleAddSuggestion(s)}
-                          className="shrink-0 text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
+                          className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
                           + Add
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                        <button onClick={() => handleDismissCurated(s.url)} aria-label="Remove suggestion"
+                          className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+
+            {visibleAiSuggestions.length > 0 && (
+              <div className="mb-3 last:mb-0">
+                <p className="text-xs text-slate-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                  <Sparkles size={11} className="text-accent" /> AI Suggested
+                </p>
+                <ul className="space-y-1">
+                  {visibleAiSuggestions.map(s => (
+                    <li key={s.title} className="flex items-start gap-2 py-1 group">
+                      <span className="text-base shrink-0">{TYPE_ICON[s.type]}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-300">{s.title}</p>
+                        <p className="text-xs text-slate-600 mt-0.5">{s.reason}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1">
+                        <button onClick={() => handleAddAiSuggestion(s)}
+                          className="text-xs px-2 py-0.5 rounded-lg border border-surface-3 text-slate-500 hover:text-accent hover:border-accent/40 transition-colors">
+                          + Add
+                        </button>
+                        <button onClick={() => handleDismissAiSuggestion(s.title)} aria-label="Remove suggestion"
+                          className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {aiSuggestionsLoading && (
+              <div className="space-y-2 py-2">{[85, 65, 75].map((w, i) => <div key={i} className="h-3 rounded bg-surface-2 animate-pulse" style={{ width: `${w}%` }} />)}</div>
+            )}
+
+            <button onClick={handleAddMoreResources} disabled={aiSuggestionsLoading}
+              className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 rounded-lg border border-surface-3 text-xs text-slate-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors">
+              <Sparkles size={12} className="text-accent" /> {aiSuggestionsLoading ? 'Finding resources...' : 'Add More Resources'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Status filter — Not started + In progress collapsed into one "Not started"
           bucket (still distinguishable per-row via each resource's own status
@@ -368,33 +446,34 @@ export default function LearningView({ initialResources, initialStudyLogs, goals
                 created_at: new Date().toISOString(), task_id: null,
               }
               setResources(prev => [newR, ...prev])
+              if (prefill) setHandledAiTitles(p => new Set(p).add(prefill.title))
               setShowForm(false)
               await addResource(fd)
             }} className="space-y-3">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Title *</label>
-                <input name="title" required autoFocus placeholder="The Pragmatic Programmer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('title') ? 'border-red-500' : 'border-surface-3'}`} />
+                <input name="title" required autoFocus defaultValue={prefill?.title ?? ''} placeholder="The Pragmatic Programmer" className={`w-full bg-surface-2 border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors ${invalidFields.has('title') ? 'border-red-500' : 'border-surface-3'}`} />
                 <FieldError show={invalidFields.has('title')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Type</label>
-                  <select name="type" defaultValue="course" className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
+                  <select name="type" defaultValue={prefill?.type ?? 'course'} className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none focus:border-accent transition-colors">
                     {TYPES.map(t => <option key={t} value={t}>{TYPE_ICON[t]} {t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500 uppercase tracking-wider">Category</label>
-                  <input name="category" placeholder="React, DSA, Playwright..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
+                  <input name="category" defaultValue={prefill?.category ?? ''} placeholder="React, DSA, Playwright..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">URL</label>
+                <label className="text-xs text-slate-500 uppercase tracking-wider">URL{prefill && ' — AI-suggested, verify before pasting a link'}</label>
                 <input name="url" type="url" placeholder="https://..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Notes</label>
-                <textarea name="notes" rows={2} placeholder="Why you want to learn this..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
+                <textarea name="notes" rows={2} defaultValue={prefill?.notes ?? ''} placeholder="Why you want to learn this..." className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-accent transition-colors resize-none" />
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 rounded-lg bg-surface-2 border border-surface-3 text-slate-300 text-sm hover:bg-surface-3 transition-colors">Cancel</button>

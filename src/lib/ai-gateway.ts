@@ -21,6 +21,7 @@ export type AITask =
   | 'health_advisor'
   | 'study_plan'
   | 'resource_quiz'
+  | 'recommend_resources'
   | 'coding_mentor'
   | 'module_recommendations'
   | 'daily_briefing'
@@ -62,6 +63,7 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   health_advisor:         { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   study_plan:             { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
   resource_quiz:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '[]' },
+  recommend_resources:    { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: '[]' },
   coding_mentor:          { model: SONNET_MODEL, cacheTTLSeconds: null,       fallback: BUDGET_FALLBACK },
   module_recommendations: { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '[]' },
   daily_briefing:         { model: SONNET_MODEL, cacheTTLSeconds: SIX_HOURS,  fallback: '' },
